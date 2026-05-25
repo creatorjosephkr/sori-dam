@@ -20,7 +20,11 @@
 **소리담**은 완전히 내 컴퓨터 안에서만 동작하는 **무료 로컬 AI 음성 생성기**입니다.  
 인터넷이나 외부 서버에 데이터를 보내지 않아 **개인 정보가 완벽하게 보호**되며, 별도 구독료나 사용 요금 없이 무제한으로 사용할 수 있습니다.
 
-> 📸 **[스크린샷 추가 예정 - 앱 메인 화면]**
+><img width="1312" height="812" alt="image" src="https://github.com/user-attachments/assets/bff26e84-7cf6-4af1-8a0e-141ff19955b4" />
+
+><img width="1312" height="812" alt="image" src="https://github.com/user-attachments/assets/db54725e-0266-4c5b-bc7d-081d4f34a2d4" />
+><img width="1312" height="812" alt="image" src="https://github.com/user-attachments/assets/dd912b52-d2fb-4717-a8d9-c7fa6654ee52" />
+
 
 ---
 
