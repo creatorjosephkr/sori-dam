@@ -20,11 +20,27 @@
 **소리담**은 완전히 내 컴퓨터 안에서만 동작하는 **무료 로컬 AI 음성 생성기**입니다.  
 인터넷이나 외부 서버에 데이터를 보내지 않아 **개인 정보가 완벽하게 보호**되며, 별도 구독료나 사용 요금 없이 무제한으로 사용할 수 있습니다.
 
-><img width="1312" height="812" alt="image" src="https://github.com/user-attachments/assets/bff26e84-7cf6-4af1-8a0e-141ff19955b4" />
+1. **AI 음성 복제 엔진**: 소리담의 강력한 음성 생성 엔진은 **VoxCPM2**를 기반으로 작동하여 극도로 자연스럽고 어조가 살아있는 음성을 빚어냅니다.
+2. **원클릭 자동 패키지 구성**: VoxCPM2 구동에 필요한 고성능 파이썬(Python) 및 핵심 AI 패키지(PyTorch 등) 요소는 최초 실행 시 **앱 내부에서 전부 자동으로 다운로드 및 설치**를 수행하므로 별도의 까다로운 사전 셋업이 전혀 필요하지 않습니다.
 
-><img width="1312" height="812" alt="image" src="https://github.com/user-attachments/assets/db54725e-0266-4c5b-bc7d-081d4f34a2d4" />
-><img width="1312" height="812" alt="image" src="https://github.com/user-attachments/assets/dd912b52-d2fb-4717-a8d9-c7fa6654ee52" />
+><img width="1312" height="812" alt="image" src="https://github.com/user-attachments/assets/646ae7ea-8f30-49cb-bac9-3d262301277a" />
+><img width="1312" height="812" alt="image" src="https://github.com/user-attachments/assets/3e5f2f12-cbb7-4ef1-a854-c3c0a4be4744" />
 
+---
+
+### 📖 [브랜드 스토리] 세상에서 가장 안전한 그릇, 소리담
+
+> **"소리를 담다, 마음을 담다."**
+> 
+> 우리가 내뱉는 목소리에는 단순한 정보 이상의 '나'라는 정체성과 감정이 담겨 있습니다. 하지만 인공지능 기술이 발전할수록, 우리의 소중한 목소리 데이터는 거대한 클라우드 서버 너머로 유출될 위험에 직면해 있습니다.
+> 
+> '소리담'은 이러한 고민에서 출발했습니다.  
+> 외부 네트워크나 거대 서버의 도움 없이, 오직 당신의 기기(로컬) 안에서만 완결되는 단단한 기술력을 바탕으로 합니다. 당신의 목소리를 정교한 인공지능 기술로 빚어내어 가장 안전한 기기라는 그릇 속에 **'오롯이 담아냅니다.'**
+> 
+> 밖으로 새어 나가지 있기에 안심할 수 있고, 기기 내부에서 즉시 샘솟기에 그 어떤 소리보다 빠르고 자연스럽습니다.  
+> 기술의 정밀함 위에 따뜻한 보안을 더한 곳.
+> 
+> 지금, 당신의 안전한 AI 음성 공방 **'소리담'**이 문을 엽니다.
 
 ---
 
@@ -48,9 +64,8 @@
 ### 👤 내 음성 관리
 등록된 AI 음성 목록을 확인하고 관리합니다.
 
-> 📸 **[스크린샷 추가 예정 - 음성 만들기 화면]**
-
-> 📸 **[스크린샷 추가 예정 - 내 목소리 등록하기 화면]**
+><img width="1312" height="812" alt="image" src="https://github.com/user-attachments/assets/25690216-9b08-44e6-8ec0-d3127b4bca2d" />
+><img width="1312" height="812" alt="image" src="https://github.com/user-attachments/assets/6adf319b-15ea-4518-b655-01e0de1443fe" />
 
 ---
 
@@ -161,7 +176,11 @@
 **Sori-Dam** is a completely **free, local AI voice generator** that runs entirely on your computer.  
 Your data never leaves your machine — no external servers, no subscriptions, no usage fees. Generate unlimited AI voices with complete privacy.
 
-> 📸 **[Screenshot placeholder — Main app screen]**
+1. **AI Voice Cloning Engine**: Sori-Dam is powered by the state-of-the-art **VoxCPM2** generation engine, creating extremely natural and expressive cloned voices.
+2. **One-Click Automated Setup**: All required components, including Python and essential AI packages (such as PyTorch), are **automatically downloaded and installed** inside the app during the first run. No complicated manual setup is required.
+
+><img width="1312" height="812" alt="image" src="https://github.com/user-attachments/assets/9105a7b1-1331-41ac-9be2-a5d265ee9506" />
+
 
 ---
 
