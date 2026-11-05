@@ -1,5 +1,21 @@
 [
   {
+    "id": "shared_1793922731_20a5ca",
+    "name": "다큐 나레이터",
+    "gender": "남성",
+    "voice_type": "male_actor",
+    "style": "중년 남성의 다큐 나레이터 스타일",
+    "sample_text": "",
+    "duration": 19.52,
+    "cfg_value": 2.0,
+    "steps": 10,
+    "target_db": -6.0,
+    "speed": 1.0,
+    "audio_file": "shared_1793922731_20a5ca.wav",
+    "author": "creatorjosephkr",
+    "created_at": 1793922731.22
+  },
+  {
     "id": "shared_1793922671_fec6c6",
     "name": "수진",
     "gender": "여성",
