@@ -258,6 +258,10 @@ function createMainWindow() {
     mainWindow.loadURL(SERVER_URL);
   });
 
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log(`[Renderer] ${message} (${sourceId}:${line})`);
+  });
+
   mainWindow.once('ready-to-show', () => {
     if (loadingWindow && !loadingWindow.isDestroyed()) {
       loadingWindow.close();

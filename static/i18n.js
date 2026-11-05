@@ -16,8 +16,8 @@ const TRANSLATIONS = {
     'nav.voices': '내 음성 관리',
     'nav.collapse': '접기',
     // 후원
-    'donate.kakao': '커피 한 잔의 후원 ☕',
-    'donate.paypal': 'PayPal 후원 💙',
+    'donate.kakao': '커피 한 잔의 후원',
+    'donate.paypal': 'PayPal 후원',
     'footer.privacy': '개인정보처리방침',
     // 소개 페이지
     'home.badge': '완전 무료 · 로컬 AI',
@@ -75,6 +75,9 @@ const TRANSLATIONS = {
     'create.restartBtn': '새로 시작',
     'create.generateBtn': '생성하기',
     'create.saveAsVoice': '내 음성으로 저장',
+    'create.modelLoadingTitle': 'AI 음성 모델 메모리 로드 중',
+    'create.modelLoadingBadge': '최초 1회만 소요',
+    'create.modelLoadingDesc': '첫 음성을 생성할 때는 고품질 AI 모델(약 4.6GB)을 시스템 메모리에 읽어오는데 시간이 다소 걸립니다.<br><span class="model-loading-highlight">다음 생성부터는 메모리에 유지되어 기다림 없이 즉시 생성됩니다.</span>',
     // 생성 기록
     'history.title': '생성 기록',
     'history.empty': '생성된 음성이 없습니다',
@@ -163,7 +166,7 @@ const TRANSLATIONS = {
     'yt.setStart': '[← 시작시간 등록',
     'yt.setEnd': '종료시간 등록 →]',
     // 후원 모달
-    'donate.title': '개발자 후원하기 ☕',
+    'donate.title': '개발자 후원하기',
     'donate.desc': '소리담을 응원해주셔서 감사합니다!<br>카카오뱅크 QR코드로 후원하실 수 있어요.',
     'donate.qrDesc': '카메라로 QR코드를 스캔하시면<br>카카오뱅크 송금 화면으로 이동합니다.',
     // 음성 힌트
@@ -176,7 +179,7 @@ const TRANSLATIONS = {
     'voice.name.male_calm': '남성 – 차분함',
     'voice.name.male_strong': '남성 – 힘참',
     // 업데이트 팝업 번역
-    'update.title': '새로운 업데이트 소식 🚀',
+    'update.title': '새로운 업데이트 소식',
     'update.body': '새로운 버전이 준비되었습니다. 지금 다운로드하여 최신 인공지능 기능과 개선사항을 경험해보세요!',
     'update.current': '현재 버전',
     'update.latest': '최신 버전',
@@ -184,7 +187,7 @@ const TRANSLATIONS = {
     'update.btnLater': '나중에 하기',
     // 소리담 첫 시작 가이드 (웰컴 모달)
     'welcome.badge': '소리담 첫 시작 가이드',
-    'welcome.title': '소리담(Sori-Dam)에 오신 것을 환영합니다! 🎙️',
+    'welcome.title': '소리담(Sori-Dam)에 오신 것을 환영합니다!',
     'welcome.subtitle': '자유롭게 나만의 AI 성우를 만들고 무제한으로 음성을 생성해보세요.',
     'welcome.sec1.title': '직접 만드는 나만의 성우',
     'welcome.sec1.desc': '소리담에는 고정된 기본 성우가 없습니다. 원하는 <strong>음성 스타일을 텍스트로 지정</strong>하여 새로운 성우를 직접 생성하거나, <strong>내 목소리(3초~30초)를 등록</strong>하여 나만의 전속 성우로 무제한 활용할 수 있습니다.',
@@ -193,10 +196,10 @@ const TRANSLATIONS = {
     'welcome.sec3.title': '100% 무료 & 오픈소스 라이선스',
     'welcome.sec3.desc': '소리담은 누구나 제한 없이 자유롭게 이용할 수 있는 <strong>100% 완전 무료 오픈소스</strong>입니다. 개인 및 상업적 콘텐츠 제작에 자유롭게 활용하실 수 있으며, <strong>출처 표기(소리담 / GitHub 저장소)</strong>를 지켜주시면 소스코드 수정 및 배포도 자유롭습니다.',
     'welcome.dontShow': '다시 보지 않기',
-    'welcome.btnStart': '소리담 시작하기 🚀',
+    'welcome.btnStart': '소리담 시작하기',
     // AI 모델 사전 설치 마법사
     'preinstall.badge': '하드웨어 가속 및 AI 모델 사전 최적화',
-    'preinstall.introTitle': '소리담 첫 시작을 환영합니다! 🎙️',
+    'preinstall.introTitle': '소리담 첫 시작을 환영합니다!',
     'preinstall.introDesc': '첫 음성을 생성할 때 대용량 다운로드로 수 분간 멈추는 지연을 없애기 위해, <strong>고품질 AI 음성 모델(VoxCPM2, 약 4.6GB) 및 가속 환경 사전 설치</strong>를 권장합니다.',
     'preinstall.benefit1Title': '첫 생성 지연 제로',
     'preinstall.benefit1Desc': '처음 만들 때 기다림 없이 즉시 쾌적하게 음성을 생성합니다.',
@@ -211,15 +214,15 @@ const TRANSLATIONS = {
     'preinstall.step3': '가속 웜업 & 로드',
     'preinstall.step4': '준비 완료',
     'preinstall.toggleLog': '세부 설치 로그 보기',
-    'preinstall.successTitle': '모든 준비가 완벽하게 완료되었습니다! 🎉',
+    'preinstall.successTitle': '모든 준비가 완벽하게 완료되었습니다!',
     'preinstall.successDesc': '내 컴퓨터의 하드웨어 가속 엔진과 고품질 음성 가중치가 메모리에 준비되었습니다.<br>이제 기다림 없이 바로 첫 목소리를 빚어보세요!',
-    'preinstall.btnStartVoice': '소리담 시작하기 🎙️',
-    'preinstall.alreadyTitle': 'AI 음성 모델이 준비되어 있습니다 ✅',
+    'preinstall.btnStartVoice': '소리담 시작하기',
+    'preinstall.alreadyTitle': 'AI 음성 모델이 준비되어 있습니다',
     'banner.modelTitle': 'AI 음성 생성 모델(약 4.6GB)이 아직 사전 설치되지 않았습니다.',
     'banner.modelDesc': '첫 음성 생성 시 모델 다운로드로 수 분이 걸릴 수 있습니다. 귀여운 안내와 함께 미리 준비해보세요!',
     // 개인정보처리방침 모달
     'privacy.badge': '100% 로컬 프라이버시 보호',
-    'privacy.title': '소리담 개인정보처리방침 🛡️',
+    'privacy.title': '소리담 개인정보처리방침',
     'privacy.subtitle': '소리담은 사용자의 어떠한 정보도 수집하거나 외부 서버에 전송하지 않습니다.',
     'privacy.sec1.title': '어떠한 정보도 수집 및 외부 전송하지 않습니다',
     'privacy.sec1.desc': '소리담은 <strong>회원가입이나 로그인이 전혀 필요 없으며</strong>, 사용자가 입력한 텍스트, 녹음하거나 추출한 음성 데이터, 생성된 오디오 파일 등 어떠한 정보도 <strong>외부 서버나 클라우드로 전송하지 않습니다</strong>.',
@@ -247,8 +250,8 @@ const TRANSLATIONS = {
     'nav.voices': 'Manage Voices',
     'nav.collapse': 'Collapse',
     // Donate
-    'donate.kakao': 'Buy Me a Coffee ☕',
-    'donate.paypal': 'PayPal Donate 💙',
+    'donate.kakao': 'Buy Me a Coffee',
+    'donate.paypal': 'PayPal Donate',
     'footer.privacy': 'Privacy Policy',
     // Home page
     'home.badge': 'Free · Local AI',
@@ -306,6 +309,9 @@ const TRANSLATIONS = {
     'create.restartBtn': 'Start Over',
     'create.generateBtn': 'Generate',
     'create.saveAsVoice': 'Save as My Voice',
+    'create.modelLoadingTitle': 'Loading AI Voice Model into Memory',
+    'create.modelLoadingBadge': 'First time only',
+    'create.modelLoadingDesc': 'The first voice generation requires loading the 4.6GB AI model into system memory.<br><span class="model-loading-highlight">Subsequent generations will be instantaneous with cached memory.</span>',
     // History
     'history.title': 'Generation History',
     'history.empty': 'No voices generated yet',
@@ -394,7 +400,7 @@ const TRANSLATIONS = {
     'yt.setStart': '[← Set Start',
     'yt.setEnd': 'Set End →]',
     // Donate modal
-    'donate.title': 'Support the Developer ☕',
+    'donate.title': 'Support the Developer',
     'donate.desc': 'Thank you for supporting Sori-Dam!<br>You can donate via KakaoBank QR code.',
     'donate.qrDesc': 'Scan the QR code with your camera<br>to open the KakaoBank transfer screen.',
     // Voice hint
@@ -407,7 +413,7 @@ const TRANSLATIONS = {
     'voice.name.male_calm': 'Male – Calm',
     'voice.name.male_strong': 'Male – Strong',
     // Update Notification
-    'update.title': 'New Update Available 🚀',
+    'update.title': 'New Update Available',
     'update.body': 'A new version is available! Download now to experience the latest AI features and improvements.',
     'update.current': 'Current Version',
     'update.latest': 'Latest Version',
@@ -415,7 +421,7 @@ const TRANSLATIONS = {
     'update.btnLater': 'Later',
     // Welcome Guide Modal
     'welcome.badge': 'Sori-Dam Quick Guide',
-    'welcome.title': 'Welcome to Sori-Dam! 🎙️',
+    'welcome.title': 'Welcome to Sori-Dam!',
     'welcome.subtitle': 'Create your own custom AI voice actors freely and generate unlimited voices.',
     'welcome.sec1.title': 'Custom AI Voice Actors',
     'welcome.sec1.desc': 'Sori-Dam has no fixed default actors. Design your own voices with <strong>natural language style prompts</strong>, or <strong>register your own voice (3-30s)</strong> to create custom cloned actors.',
@@ -424,10 +430,10 @@ const TRANSLATIONS = {
     'welcome.sec3.title': '100% Free & Open Source',
     'welcome.sec3.desc': 'Sori-Dam is <strong>100% completely free and open-source</strong> for everyone (commercial and personal use). You are free to modify and redistribute source code with proper <strong>attribution (Sori-Dam / GitHub repository)</strong>.',
     'welcome.dontShow': 'Do not show again',
-    'welcome.btnStart': 'Get Started 🚀',
+    'welcome.btnStart': 'Get Started',
     // AI Model Pre-installation Wizard
     'preinstall.badge': 'Hardware Acceleration & Model Optimization',
-    'preinstall.introTitle': 'Welcome to Sori-Dam! 🎙️',
+    'preinstall.introTitle': 'Welcome to Sori-Dam!',
     'preinstall.introDesc': 'To avoid multi-minute freezes on your first voice generation, we recommend <strong>pre-installing the high-quality AI voice model (VoxCPM2, ~4.6GB) and acceleration environment</strong>.',
     'preinstall.benefit1Title': 'Zero First-Gen Delay',
     'preinstall.benefit1Desc': 'Generate speech right away without minutes of waiting on first run.',
@@ -442,15 +448,15 @@ const TRANSLATIONS = {
     'preinstall.step3': 'Engine Warm-up',
     'preinstall.step4': 'Ready',
     'preinstall.toggleLog': 'View Detailed Log',
-    'preinstall.successTitle': 'Everything is Ready! 🎉',
+    'preinstall.successTitle': 'Everything is Ready!',
     'preinstall.successDesc': 'Your hardware acceleration engine and high-quality voice model are loaded into memory.<br>Start crafting your voice right away!',
-    'preinstall.btnStartVoice': 'Start Sori-Dam 🎙️',
-    'preinstall.alreadyTitle': 'AI Voice Model is Ready ✅',
+    'preinstall.btnStartVoice': 'Start Sori-Dam',
+    'preinstall.alreadyTitle': 'AI Voice Model is Ready',
     'banner.modelTitle': 'AI Voice Model (~4.6GB) has not been pre-installed yet.',
     'banner.modelDesc': 'First generation may take several minutes to download. Prepare in advance with friendly guide!',
     // Privacy Policy Modal
     'privacy.badge': '100% Local Privacy Protection',
-    'privacy.title': 'Sori-Dam Privacy Policy 🛡️',
+    'privacy.title': 'Sori-Dam Privacy Policy',
     'privacy.subtitle': 'Sori-Dam does not collect or transmit any of your personal information to external servers.',
     'privacy.sec1.title': 'Zero Data Collection & Transmission',
     'privacy.sec1.desc': 'Sori-Dam <strong>does not require any sign-up or login</strong>. Any text you enter, voices you record/extract, and generated audios are <strong>never sent to any external server or cloud</strong>.',
@@ -520,6 +526,9 @@ function setLanguage(lang) {
   }
 }
 
+const THEME_SVG_SUN = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+const THEME_SVG_MOON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
 /** 다크/라이트 모드 전환 */
 function setTheme(theme) {
   _theme = theme;
@@ -527,7 +536,7 @@ function setTheme(theme) {
   try { localStorage.setItem('vox_theme', theme); } catch (_) {}
   const icon = document.getElementById('btnThemeIcon');
   if (icon) {
-    icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    icon.innerHTML = theme === 'dark' ? THEME_SVG_SUN : THEME_SVG_MOON;
   }
 }
 
@@ -547,5 +556,5 @@ function initI18nAndTheme() {
   const label = document.getElementById('btnLangLabel');
   if (label) label.textContent = _lang === 'ko' ? 'English' : '한국어';
   const icon = document.getElementById('btnThemeIcon');
-  if (icon) icon.textContent = _theme === 'dark' ? '☀️' : '🌙';
+  if (icon) icon.innerHTML = _theme === 'dark' ? THEME_SVG_SUN : THEME_SVG_MOON;
 }

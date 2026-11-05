@@ -34,6 +34,11 @@ const ico = {
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
+let _modelStatus = null;
+let checkModelStatus = null;
+window._modelStatus = null;
+window.checkModelStatus = null;
+
 const S = {
   tab: 'basic',
   basicVoices: [],
@@ -758,9 +763,13 @@ function renderVoiceSelect() {
 
   if (S.tab === 'basic') {
     addOpt('', t('create.voiceNone'), false);
-    sel.value = '';
     addGroup(t('voice.group.female'), S.basicVoices.filter(v => v.gender === '여성'), 'id', 'name', true);
     addGroup(t('voice.group.male'), S.basicVoices.filter(v => v.gender === '남성'), 'id', 'name', true);
+    // 기본 추천 음성(여성-기본)을 사전 선택해 사용자가 텍스트만 입력하고도 바로 생성할 수 있도록 기본값 제공
+    const defaultVoice = S.basicVoices.find(v => v.id === 'female_standard') || S.basicVoices[0];
+    if (defaultVoice) {
+      sel.value = defaultVoice.id;
+    }
   } else {
     if (S.myVoices.length === 0) {
       addOpt('', t('create.noVoice'), true);
@@ -1073,113 +1082,212 @@ function renderAll() {
 
 // ── Generate ──────────────────────────────────────────────────────────────────
 async function handleGenerate() {
-  const text = document.getElementById('textInput').value.trim();
-  if (!text) { toast('텍스트를 입력하세요.', 'error'); return; }
+  try {
+    const text = document.getElementById('textInput').value.trim();
+    if (!text) { toast('텍스트를 입력하세요.', 'error'); return; }
 
-  const voiceId = document.getElementById('voiceSelect').value;
-  const style = document.getElementById('styleInput').value.trim();
+    let voiceId = document.getElementById('voiceSelect').value;
+    const style = document.getElementById('styleInput').value.trim();
 
-  if (S.tab === 'my' && !voiceId) { toast('내 음성을 선택하세요.', 'error'); return; }
-  if (S.tab === 'basic' && !voiceId && !style) { toast('음성을 선택하거나 스타일을 입력하세요.', 'error'); return; }
-  const cfg = document.getElementById('cfgSlider').value;
-  const steps = document.getElementById('stepsSlider').value;
-  const targetDb = document.getElementById('targetDbSlider').value;
-  const speed = document.getElementById('speedSlider').value;
-
-  // 로그창 준비
-  const logWindow = document.getElementById('logWindow');
-  const logContent = document.getElementById('logContent');
-  logWindow.hidden = false;
-  logContent.innerHTML = '';
-
-  function appendLog(msg) {
-    // 로그 타입 분류
-    const isProgress = /^\s*\d+%\s*\|/.test(msg) || msg.includes('it/s]') || msg.includes('s/it]');
-    const isError = msg.startsWith('✗') || msg.includes('Error') || msg.includes('error') || msg.includes('Traceback');
-    const isServer = msg.startsWith('[server]');
-    const isSystem = msg.startsWith('[Sori-Dam]') || msg.startsWith('[voxcpm') || msg.startsWith('Warm') || msg.startsWith('Running') || msg.startsWith('Loading') || msg.startsWith('Fetching');
-
-    // ── tqdm 진행바: 기존 줄 덮어쓰기 (같은 줄 유지) ──
-    if (isProgress) {
-      let progressLine = logContent.querySelector('.log-progress-live');
-      if (!progressLine) {
-        progressLine = document.createElement('div');
-        progressLine.className = 'log-line log-progress log-progress-live';
-        logContent.appendChild(progressLine);
-      }
-      progressLine.textContent = msg;
-      logWindow.scrollTop = logWindow.scrollHeight;
+    // 기본 음성 탭에서 사용자가 아무것도 선택하지 않은 경우에도 기본 여성 음성으로 자동 지정하여 즉시 생성 가능하게 지원
+    if (S.tab === 'basic' && !voiceId && !style) {
+      voiceId = S.basicVoices[0]?.id || 'female_standard';
+      const sel = document.getElementById('voiceSelect');
+      if (sel) sel.value = voiceId;
+    } else if (S.tab === 'my' && !voiceId) {
+      toast('내 음성을 선택하세요.', 'error');
       return;
     }
 
-    const line = document.createElement('div');
-    let cls = 'log-line';
+    const cfg = document.getElementById('cfgSlider').value;
+    const steps = document.getElementById('stepsSlider').value;
+    const targetDb = document.getElementById('targetDbSlider').value;
+    const speed = document.getElementById('speedSlider').value;
 
-    if (isError) {
-      cls += ' err';
-    } else if (isServer) {
-      cls += ' log-server';
-      const tagSpan = document.createElement('span');
-      tagSpan.style.cssText = 'color: var(--text-tertiary); font-weight: 700; margin-right: 4px;';
-      tagSpan.textContent = '[server]';
-      const textSpan = document.createElement('span');
-      textSpan.textContent = msg.slice(8);
+    // 로그창 준비
+    const logWindow = document.getElementById('logWindow');
+    const logContent = document.getElementById('logContent');
+    if (logWindow) logWindow.hidden = false;
+    if (logContent) logContent.innerHTML = '';
+
+    // 첫 음성 생성 시 AI 모델 로딩 안내 및 실시간 진행 상태 박스 준비
+    const loadBox = document.getElementById('modelLoadingProgressBox');
+    const barFill = document.getElementById('modelLoadBarFill');
+    const pctEl = document.getElementById('modelLoadPct');
+    const capEl = document.getElementById('modelLoadCapacityText');
+    const statusMsg = document.getElementById('modelLoadStatusMsg');
+    const devTag = document.getElementById('modelLoadDeviceTag');
+
+    const isModelAlreadyLoaded = Boolean(_modelStatus && _modelStatus.loaded);
+    if (!isModelAlreadyLoaded && loadBox) {
+      loadBox.removeAttribute('hidden');
+      loadBox.style.display = 'block';
+      if (barFill) barFill.style.width = '2%';
+      if (pctEl) pctEl.textContent = '2%';
+      if (capEl) capEl.textContent = '0.0 GB / 4.6 GB';
+      if (statusMsg) {
+        statusMsg.style.color = '';
+        statusMsg.textContent = '대용량 AI 음성 모델(약 4.6GB) 불러오기 준비 중...';
+      }
+      if (devTag && _modelStatus && _modelStatus.device) {
+        devTag.textContent = _modelStatus.device;
+      }
+    }
+
+    function appendLog(msg) {
+      if (!logContent || !logWindow) return;
+
+      // 로그 타입 분류
+      const isProgress = /^\s*\d+%\s*\|/.test(msg) || msg.includes('it/s]') || msg.includes('s/it]');
+      const isError = msg.startsWith('✗') || msg.includes('Error') || msg.includes('error') || msg.includes('Traceback');
+      const isServer = msg.startsWith('[server]');
+      const isSystem = msg.startsWith('[Sori-Dam]') || msg.startsWith('[voxcpm') || msg.startsWith('Warm') || msg.startsWith('Running') || msg.startsWith('Loading') || msg.startsWith('Fetching');
+
+      // ── tqdm 진행바: 기존 줄 덮어쓰기 (같은 줄 유지) ──
+      if (isProgress) {
+        let progressLine = logContent.querySelector('.log-progress-live');
+        if (!progressLine) {
+          progressLine = document.createElement('div');
+          progressLine.className = 'log-line log-progress log-progress-live';
+          logContent.appendChild(progressLine);
+        }
+        progressLine.textContent = msg;
+        logWindow.scrollTop = logWindow.scrollHeight;
+        return;
+      }
+
+      const line = document.createElement('div');
+      let cls = 'log-line';
+
+      if (isError) {
+        cls += ' err';
+      } else if (isServer) {
+        cls += ' log-server';
+        const tagSpan = document.createElement('span');
+        tagSpan.style.cssText = 'color: var(--text-tertiary); font-weight: 700; margin-right: 4px;';
+        tagSpan.textContent = '[server]';
+        const textSpan = document.createElement('span');
+        textSpan.textContent = msg.slice(8);
+        line.className = cls;
+        line.appendChild(tagSpan);
+        line.appendChild(textSpan);
+        logContent.appendChild(line);
+        logWindow.scrollTop = logWindow.scrollHeight;
+        return;
+      } else if (isSystem) {
+        cls += ' log-system';
+      }
+
       line.className = cls;
-      line.appendChild(tagSpan);
-      line.appendChild(textSpan);
+      line.textContent = msg;
       logContent.appendChild(line);
       logWindow.scrollTop = logWindow.scrollHeight;
-      return;
-    } else if (isSystem) {
-      cls += ' log-system';
     }
 
-    line.className = cls;
-    line.textContent = msg;
-    logContent.appendChild(line);
-    logWindow.scrollTop = logWindow.scrollHeight;
-  }
+    appendLog('▶  음성 생성 준비 중...');
 
-  appendLog('▶  음성 생성 준비 중...');
+    const sessionId = Math.random().toString(36).slice(2, 10);
+    const evtSource = new EventSource(`/api/logs/${sessionId}`);
+    evtSource.onmessage = e => {
+      if (e.data === '[DONE]') { evtSource.close(); return; }
 
-  const sessionId = Math.random().toString(36).slice(2, 10);
-  const evtSource = new EventSource(`/api/logs/${sessionId}`);
-  evtSource.onmessage = e => {
-    if (e.data === '[DONE]') { evtSource.close(); return; }
-    appendLog(e.data);
-  };
-  evtSource.onerror = () => evtSource.close();
+      // 모델 로딩 실시간 진행률 이벤트 처리
+      if (e.data.startsWith('[MODEL_PROGRESS]')) {
+        try {
+          const p = JSON.parse(e.data.slice(16).trim());
+          if (loadBox) {
+            loadBox.removeAttribute('hidden');
+            loadBox.style.display = 'block';
+            if (barFill) barFill.style.width = `${p.pct}%`;
+            if (pctEl) pctEl.textContent = `${p.pct}%`;
+            if (capEl) {
+              const gbDone = (p.loaded_mb / 1024).toFixed(1);
+              const gbTotal = (p.total_mb / 1024).toFixed(1);
+              capEl.textContent = `${gbDone} GB / ${gbTotal} GB (${Math.round(p.loaded_mb).toLocaleString()} MB)`;
+            }
+            if (statusMsg && p.message) statusMsg.textContent = p.message;
+            if (p.stage === 'done') {
+              if (_modelStatus) _modelStatus.loaded = true;
+              if (typeof checkModelStatus === 'function') checkModelStatus(true);
+              setTimeout(() => {
+                if (loadBox) {
+                  loadBox.setAttribute('hidden', 'true');
+                  loadBox.style.display = 'none';
+                }
+              }, 1200);
+            }
+          }
+        } catch (err) {
+          console.warn('모델 로딩 진행률 파싱 오류:', err);
+        }
+        return;
+      }
 
-  // SSE 큐 등록 대기 (타이밍 이슈 방지)
-  await new Promise(r => setTimeout(r, 80));
+      appendLog(e.data);
+    };
+    evtSource.onerror = () => evtSource.close();
 
-  setGenerating(true);
-  try {
-    const fd = new FormData();
-    fd.append('text', text);
-    fd.append('style', style);
-    fd.append('voice_type', S.tab);
-    fd.append('cfg_value', cfg);
-    fd.append('steps', steps);
-    fd.append('target_db', targetDb);
-    fd.append('speed', speed);
-    fd.append('session_id', sessionId);
-    if (S.tab === 'basic') fd.append('basic_voice_id', voiceId);
-    else fd.append('my_voice_id', voiceId);
+    // SSE 연결 대기 (빠른 연결 확인 후 생성 요청 진행)
+    await new Promise(resolve => {
+      let resolved = false;
+      const done = () => { if (!resolved) { resolved = true; resolve(); } };
+      evtSource.onopen = done;
+      evtSource.onerror = done;
+      setTimeout(done, 120);
+    });
 
-    const result = await api('POST', '/api/generate', fd);
-    S.currentOutput = result;
-    showPlayer(result);
+    setGenerating(true);
+    let hasError = false;
+    try {
+      const fd = new FormData();
+      fd.append('text', text);
+      fd.append('style', style);
+      fd.append('voice_type', S.tab);
+      fd.append('cfg_value', cfg);
+      fd.append('steps', steps);
+      fd.append('target_db', targetDb);
+      fd.append('speed', speed);
+      fd.append('session_id', sessionId);
+      if (S.tab === 'basic') fd.append('basic_voice_id', voiceId);
+      else fd.append('my_voice_id', voiceId);
 
-    await refreshOutputs();
-    renderOutputs();
-    document.getElementById('restartBtn').hidden = false;
-    toast('음성이 생성되었습니다.', 'success');
-  } catch (e) {
-    evtSource.close();
-    toast(e.message, 'error');
-  } finally {
+      const result = await api('POST', '/api/generate', fd);
+      S.currentOutput = result;
+      showPlayer(result);
+
+      await refreshOutputs();
+      renderOutputs();
+      document.getElementById('restartBtn').hidden = false;
+      appendLog('✓  음성 생성이 완료되었습니다.');
+      toast('음성이 생성되었습니다.', 'success');
+    } catch (e) {
+      hasError = true;
+      evtSource.close();
+      appendLog(`✗  오류 발생: ${e.message}`);
+      if (statusMsg) {
+        statusMsg.style.color = '#ff453a';
+        statusMsg.textContent = `생성 실패: ${e.message}`;
+      }
+      toast(e.message, 'error');
+    } finally {
+      setGenerating(false);
+      if (loadBox) {
+        if (hasError) {
+          setTimeout(() => {
+            loadBox.setAttribute('hidden', 'true');
+            loadBox.style.display = 'none';
+            if (statusMsg) statusMsg.style.color = '';
+          }, 3500);
+        } else {
+          loadBox.setAttribute('hidden', 'true');
+          loadBox.style.display = 'none';
+        }
+      }
+    }
+  } catch (fatalErr) {
+    console.error('[handleGenerate fatal error]', fatalErr);
     setGenerating(false);
+    toast(fatalErr.message || '음성 생성 중 오류가 발생했습니다.', 'error');
   }
 }
 
@@ -1541,10 +1649,10 @@ function updateTrimLabels() {
   // 경고 표시
   const warn = document.getElementById('trimWarning');
   if (sel < 3) {
-    warn.textContent = '⚠ 선택 구간이 3초 미만입니다. 최소 3초 이상 선택해야 등록 가능합니다.';
+    warn.textContent = '선택 구간이 3초 미만입니다. 최소 3초 이상 선택해야 등록 가능합니다.';
     warn.style.display = 'block';
   } else if (sel > 30) {
-    warn.textContent = '⚠ 선택 구간이 30초를 초과합니다. 최대 30초 이하로 선택해야 합니다.';
+    warn.textContent = '선택 구간이 30초를 초과합니다. 최대 30초 이하로 선택해야 합니다.';
     warn.style.display = 'block';
   } else {
     warn.style.display = 'none';
@@ -2176,7 +2284,7 @@ function showRecordingModal() {
             }
             isRecording = false;
             recBtn.classList.remove('recording');
-            statusEl.textContent = `✓ 30초 제한 도달 — 녹음 완료`;
+            statusEl.textContent = `30초 제한 도달 — 녹음 완료`;
             
             // 캔버스 클리어
             const canvas = document.getElementById('recWaveCanvas');
@@ -2209,10 +2317,10 @@ function showRecordingModal() {
         isRecording = false;
         recBtn.classList.remove('recording');
         statusEl.textContent = seconds < 3
-          ? `⚠ ${seconds}초 녹음됨 — 3초 이상 필요합니다`
+          ? `${seconds}초 녹음됨 — 3초 이상 필요합니다`
           : seconds > 30
-          ? `⚠ ${seconds}초 녹음됨 — 최대 30초까지만 가능합니다`
-          : `✓ ${seconds}초 녹음 완료`;
+          ? `${seconds}초 녹음됨 — 최대 30초까지만 가능합니다`
+          : `${seconds}초 녹음 완료`;
 
         // 캔버스 클리어
         const canvas = document.getElementById('recWaveCanvas');
@@ -3325,7 +3433,7 @@ async function handleRegPageBtnClick() {
   const statusEl = document.getElementById('regPageStatus');
 
   if (!regPageIsRecording) {
-    // ⚠️ 시작 시 무조건 주의사항 필수 동의 모달을 먼저 거친다!
+    // 시작 시 무조건 주의사항 필수 동의 모달을 먼저 거친다!
     const consentContent = `
       <div style="font-size: 14px; line-height: 1.6; color: var(--text-primary); margin-bottom: 16px;">
         <div style="background: rgba(255, 69, 58, 0.08); border: 1px solid rgba(255, 69, 58, 0.15); padding: 12px 16px; border-radius: 8px; color: #ff453a; font-weight: 600; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 8px;">
@@ -3526,14 +3634,14 @@ function stopRecordingSession(isLimitReached = false) {
   recBtn.querySelector('span').style.height = '28px';
 
   if (isLimitReached) {
-    statusEl.textContent = `✓ 30초 제한 도달 — 임시 저장 완료`;
+    statusEl.textContent = `30초 제한 도달 — 임시 저장 완료`;
     toast('최대 녹음 시간(30초)에 도달하여 녹음이 자동 종료되었습니다.', 'info');
   } else {
     statusEl.textContent = regPageSeconds < 3
-      ? `⚠ ${regPageSeconds}초 녹음됨 — 3초 이상 필요합니다`
+      ? `${regPageSeconds}초 녹음됨 — 3초 이상 필요합니다`
       : regPageSeconds > 30
-      ? `⚠ ${regPageSeconds}초 녹음됨 — 최대 30초까지만 가능합니다`
-      : `✓ ${regPageSeconds}초 녹음 완료`;
+      ? `${regPageSeconds}초 녹음됨 — 최대 30초까지만 가능합니다`
+      : `${regPageSeconds}초 녹음 완료`;
   }
 
   // 캔버스 클리어
@@ -4714,7 +4822,6 @@ function playTempRecording(item) {
   }
 
   // ── AI 음성 모델 사전 설치 & 귀여운 캐릭터(소리담이) 마법사 ───────────────────
-  let _modelStatus = null;
   let _preinstallEventSource = null;
   let _damiSpeechTimer = null;
   let _damiClickCount = 0;
@@ -4723,45 +4830,45 @@ function playTempRecording(item) {
     const hwName = (_modelStatus && _modelStatus.cpu_brand) || '시스템';
     const devType = (_modelStatus && _modelStatus.device_type) || 'cpu';
 
-    let hwSpeech = `⚡ ${hwName} 신경망 가속 엔진을 깨우고 있어요!`;
-    let hwOptSpeech = `⚡ ${hwName} 연산 유닛에 맞게 신경망을 최적화하고 있어요.`;
+    let hwSpeech = `${hwName} 신경망 가속 엔진을 깨우고 있어요!`;
+    let hwOptSpeech = `${hwName} 연산 유닛에 맞게 신경망을 최적화하고 있어요.`;
     if (devType === 'mps') {
-      hwSpeech = `🍎 ${hwName} 칩의 신경망 가속 엔진(MPS)을 깨우고 있어요!`;
-      hwOptSpeech = `🍎 ${hwName} 뉴럴 코어에 맞게 신경망을 최적화하고 있어요.`;
+      hwSpeech = `${hwName} 칩의 신경망 가속 엔진(MPS)을 깨우고 있어요!`;
+      hwOptSpeech = `${hwName} 뉴럴 코어에 맞게 신경망을 최적화하고 있어요.`;
     } else if (devType === 'cuda') {
-      hwSpeech = `🚀 NVIDIA CUDA GPU 가속 코어를 깨우고 있어요!`;
-      hwOptSpeech = `⚡ CUDA 텐서 코어에 맞춰 신경망 연산 커널을 최적화하고 있어요.`;
+      hwSpeech = `NVIDIA CUDA GPU 가속 코어를 깨우고 있어요!`;
+      hwOptSpeech = `CUDA 텐서 코어에 맞춰 신경망 연산 커널을 최적화하고 있어요.`;
     } else {
-      hwSpeech = `💻 ${hwName} 멀티스레드 CPU 가속 엔진을 준비하고 있어요!`;
-      hwOptSpeech = `⚙️ CPU 멀티스레드 환경에 맞게 고속 추론 커널을 최적화하고 있어요.`;
+      hwSpeech = `${hwName} 멀티스레드 CPU 가속 엔진을 준비하고 있어요!`;
+      hwOptSpeech = `CPU 멀티스레드 환경에 맞게 고속 추론 커널을 최적화하고 있어요.`;
     }
 
     const quotes = {
       searching: [
         hwSpeech,
-        "🔍 최적의 하드웨어 가속 경로를 꼼꼼히 탐색 중이에요...",
-        "✨ 조금만 기다려주세요, 최고의 음질을 준비할게요!"
+        "최적의 하드웨어 가속 경로를 꼼꼼히 탐색 중이에요...",
+        "조금만 기다려주세요, 최고의 음질을 준비할게요!"
       ],
       downloading: [
-        "🎧 세상에서 가장 자연스러운 목소리들을 담는 중이에요~",
-        "📦 대용량 AI 모델 가중치(4.6GB)를 소중히 담아오고 있어요...",
-        "✨ 최초 실행 때 딱 한 번만 준비하면, 다음부터는 기다림 없이 바로 나온답니다!",
-        "💡 저(소리담이)를 클릭해보세요! (뿅!)"
+        "세상에서 가장 자연스러운 목소리들을 담는 중이에요~",
+        "대용량 AI 모델 가중치(4.6GB)를 소중히 담아오고 있어요...",
+        "최초 실행 때 딱 한 번만 준비하면, 다음부터는 기다림 없이 바로 나온답니다!",
+        "저(소리담이)를 클릭해보세요! (뿅!)"
       ],
       studying: [
-        "📖 한국어와 영어의 자연스러운 억양과 발음을 공부하는 중!",
-        "💡 전구 반짝! 소리담의 인공지능 두뇌가 총명해지고 있어요~",
+        "한국어와 영어의 자연스러운 억양과 발음을 공부하는 중!",
+        "전구 반짝! 소리담의 인공지능 두뇌가 총명해지고 있어요~",
         hwOptSpeech
       ],
       singing: [
-        "🎤 라라라~♪ 신경망 엔진 목 풀기(Warm-up) 중!",
-        "🎵 첫 음성 합성 테스트 성공! 목소리가 정말 예뻐요~",
-        "⚡ 곧 모든 준비가 완료됩니다!"
+        "라라라~ 신경망 엔진 목 풀기(Warm-up) 중!",
+        "첫 음성 합성 테스트 성공! 목소리가 정말 예뻐요~",
+        "곧 모든 준비가 완료됩니다!"
       ],
       celebrating: [
-        "🎉 와아! 모든 준비가 완벽하게 끝났어요!",
-        "💖 지금 바로 첫 목소리를 만들어보세요! (두근두근)",
-        "✨ 이제 인터넷 없이도 완전 무료로 무제한 사용 가능해요!"
+        "와아! 모든 준비가 완벽하게 끝났어요!",
+        "지금 바로 첫 목소리를 만들어보세요! (두근두근)",
+        "이제 인터넷 없이도 완전 무료로 무제한 사용 가능해요!"
       ]
     };
     return quotes[action] || quotes.downloading;
@@ -4820,7 +4927,7 @@ function playTempRecording(item) {
     if (!modal) return;
     const chk = document.getElementById('welcomeDontShowAgain');
     if (chk) {
-      chk.checked = localStorage.getItem('soridam_welcome_seen') === 'true';
+      chk.checked = localStorage.getItem('soridam_welcome_dismissed') === 'true';
     }
     modal.removeAttribute('hidden');
     modal.style.display = 'flex';
@@ -4834,13 +4941,16 @@ function playTempRecording(item) {
     }
     const chk = document.getElementById('welcomeDontShowAgain');
     if (chk && chk.checked) {
-      localStorage.setItem('soridam_welcome_seen', 'true');
+      localStorage.setItem('soridam_welcome_dismissed', 'true');
     }
   }
 
   function handleWelcomeStart() {
+    const chk = document.getElementById('welcomeDontShowAgain');
+    if (chk && chk.checked) {
+      localStorage.setItem('soridam_welcome_dismissed', 'true');
+    }
     closeWelcomeModal();
-    localStorage.setItem('soridam_welcome_seen', 'true');
 
     // 모델 미설치 상태이고 사전 설치 안내를 본 적 없다면 자연스럽게 연결
     if (_modelStatus && !_modelStatus.installed && localStorage.getItem('soridam_preinstall_prompted') !== 'true') {
@@ -4875,9 +4985,9 @@ function playTempRecording(item) {
     if (chk) {
       chk.onchange = () => {
         if (chk.checked) {
-          localStorage.setItem('soridam_welcome_seen', 'true');
+          localStorage.setItem('soridam_welcome_dismissed', 'true');
         } else {
-          localStorage.removeItem('soridam_welcome_seen');
+          localStorage.removeItem('soridam_welcome_dismissed');
         }
       };
     }
@@ -4977,11 +5087,12 @@ function playTempRecording(item) {
     stopDamiSpeechRotation();
   }
 
-  async function checkModelStatus(silent = false) {
+  checkModelStatus = async function checkModelStatus(silent = false) {
     try {
       const res = await fetch('/api/system/model-status');
       if (!res.ok) return;
       _modelStatus = await res.json();
+      window._modelStatus = _modelStatus;
 
       const btnDot = document.getElementById('btnModelSetupDot');
       const btnLabel = document.getElementById('btnModelSetupLabel');
@@ -5008,7 +5119,7 @@ function playTempRecording(item) {
         if (banner) banner.hidden = false;
 
         // 최초 1회 자동 팝업 (시작 안내를 이미 본 경우에만 바로 표시)
-        if (!silent && localStorage.getItem('soridam_welcome_seen') === 'true' && localStorage.getItem('soridam_preinstall_prompted') !== 'true') {
+        if (!silent && localStorage.getItem('soridam_welcome_dismissed') === 'true' && localStorage.getItem('soridam_preinstall_prompted') !== 'true') {
           localStorage.setItem('soridam_preinstall_prompted', 'true');
           setTimeout(() => {
             openPreinstallModal('intro');
@@ -5018,14 +5129,15 @@ function playTempRecording(item) {
     } catch (e) {
       console.warn('[Sori-Dam] 모델 상태 확인 실패:', e);
     }
-  }
+  };
+  window.checkModelStatus = checkModelStatus;
 
   function startPreinstallationStream() {
     try {
       openPreinstallModal('progress');
       const startMsg = (_modelStatus && _modelStatus.cpu_brand)
-        ? `⚡ ${_modelStatus.cpu_brand} 가속 환경을 확인하는 중입니다...`
-        : '⚡ 시스템 및 가속 환경을 확인하는 중입니다...';
+        ? `${_modelStatus.cpu_brand} 가속 환경을 확인하는 중입니다...`
+        : '시스템 및 가속 환경을 확인하는 중입니다...';
       setDamiAction('searching', startMsg);
       startDamiSpeechRotation('searching');
 
@@ -5074,9 +5186,9 @@ function playTempRecording(item) {
               _preinstallEventSource = null;
             }
             stopDamiSpeechRotation();
-            setDamiAction('searching', '⚠️ 문제가 발생했습니다. 터미널 로그를 확인해 주세요.');
+            setDamiAction('searching', '문제가 발생했습니다. 터미널 로그를 확인해 주세요.');
             if (consoleEl) {
-              consoleEl.textContent += `\n[${new Date().toLocaleTimeString()}] ❌ 오류: ${data.error_msg || data.message}`;
+              consoleEl.textContent += `\n[${new Date().toLocaleTimeString()}] [오류] ${data.error_msg || data.message}`;
             }
             return;
           }
@@ -5140,7 +5252,7 @@ function playTempRecording(item) {
               _preinstallEventSource = null;
             }
             stopDamiSpeechRotation();
-            setDamiAction('celebrating', '🎉 만세! 모든 준비가 끝났어요!');
+            setDamiAction('celebrating', '만세! 모든 준비가 끝났어요!');
             setTimeout(() => {
               const progressView = document.getElementById('preinstallProgressView');
               const successView = document.getElementById('preinstallSuccessView');
@@ -5234,7 +5346,9 @@ function playTempRecording(item) {
       btnToggleConsole.onclick = () => {
         const isHidden = consoleWrap.hidden;
         consoleWrap.hidden = !isHidden;
-        if (toggleIcon) toggleIcon.textContent = isHidden ? '▼' : '▶';
+        if (toggleIcon) {
+          toggleIcon.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+        }
       };
     }
 
@@ -5251,9 +5365,9 @@ function playTempRecording(item) {
           const hw = (_modelStatus && _modelStatus.cpu_brand) || '초고속';
           const clickQuotes = [
             "앗, 간지러워요! (≧◡≦)",
-            "영차영차, 거의 다 와가요! 힘내라 힘! 💪",
-            "소리담을 찾아주셔서 정말 기뻐요! 💖",
-            `피융~! 🚀 (${hw} 가속 엔진 최고 속도로 달리는 중)`,
+            "영차영차, 거의 다 와가요! 힘내라 힘!",
+            "소리담을 찾아주셔서 정말 기뻐요!",
+            `피융~! (${hw} 가속 엔진 최고 속도로 달리는 중)`,
             "뽀잉! ٩(ˊᗜˋ*)و 소리담이와 함께 멋진 목소리를 만들어요!"
           ];
           speech.textContent = clickQuotes[(_damiClickCount - 1) % clickQuotes.length];
@@ -5268,11 +5382,11 @@ function playTempRecording(item) {
   bindPreinstallEvents();
   checkModelStatus();
 
-  // 최초 1회 시작 안내 가이드 팝업
-  if (localStorage.getItem('soridam_welcome_seen') !== 'true') {
+  // 최초 1회 시작 안내 가이드 팝업 (다시 보지 않기를 선택하지 않은 경우 표시)
+  if (localStorage.getItem('soridam_welcome_dismissed') !== 'true') {
     setTimeout(() => {
       openWelcomeModal();
-    }, 300);
+    }, 400);
   }
 
   showPage('home');

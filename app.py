@@ -161,18 +161,51 @@ _main_loop = None
 @app.on_event("startup")
 async def _capture_loop():
     global _main_loop
-    _main_loop = asyncio.get_event_loop()
+    try:
+        _main_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        _main_loop = asyncio.get_event_loop()
+
+def _get_queue(session_id: str) -> asyncio.Queue:
+    global _main_loop
+    if _main_loop is None or not _main_loop.is_running():
+        try:
+            _main_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+    if session_id not in _log_queues:
+        _log_queues[session_id] = asyncio.Queue()
+    return _log_queues[session_id]
 
 def _push_log(session_id: str, msg: str):
-    if not session_id or not _main_loop:
+    global _main_loop
+    if not session_id:
         return
-    q = _log_queues.get(session_id)
-    if q:
+    q = _get_queue(session_id)
+    if _main_loop is None or not _main_loop.is_running():
+        try:
+            _main_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+    if _main_loop and _main_loop.is_running():
         _main_loop.call_soon_threadsafe(q.put_nowait, msg)
+    else:
+        try:
+            q.put_nowait(msg)
+        except Exception:
+            pass
 
 def _broadcast_log(msg: str):
     """활성 세션 모두에 로그를 브로드캐스트"""
-    if not _main_loop or not _log_queues:
+    global _main_loop
+    if not _log_queues:
+        return
+    if _main_loop is None or not _main_loop.is_running():
+        try:
+            _main_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+    if not _main_loop or not _main_loop.is_running():
         return
     clean = msg.rstrip('\n').rstrip('\r')
     if not clean:
@@ -188,23 +221,28 @@ class _TeeBroadcastStream:
     def __init__(self, original):
         self._orig = original
         self._buf = ""
+        self._in_write = False
 
     def write(self, text):
         self._orig.write(text)
-        # 줄 단위로 모아서 전달 (tqdm은 \r로 줄 업데이트)
-        self._buf += text
-        while '\n' in self._buf or '\r' in self._buf:
-            # \r\n, \n, \r 모두 처리
-            for sep in ['\r\n', '\n', '\r']:
-                idx = self._buf.find(sep)
-                if idx != -1:
-                    line = self._buf[:idx]
-                    self._buf = self._buf[idx + len(sep):]
-                    if line.strip():
-                        _broadcast_log(line)
+        if self._in_write:
+            return
+        self._in_write = True
+        try:
+            self._buf += text
+            while '\n' in self._buf or '\r' in self._buf:
+                for sep in ['\r\n', '\n', '\r']:
+                    idx = self._buf.find(sep)
+                    if idx != -1:
+                        line = self._buf[:idx]
+                        self._buf = self._buf[idx + len(sep):]
+                        if line.strip():
+                            _broadcast_log(line)
+                        break
+                else:
                     break
-            else:
-                break
+        finally:
+            self._in_write = False
 
     def flush(self):
         self._orig.flush()
@@ -218,8 +256,12 @@ sys.stderr = _TeeBroadcastStream(sys.__stderr__)
 
 @app.get("/api/logs/{session_id}")
 async def stream_logs(session_id: str):
-    q: asyncio.Queue = asyncio.Queue()
-    _log_queues[session_id] = q
+    global _main_loop
+    try:
+        _main_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    q = _get_queue(session_id)
 
     async def generator():
         try:
@@ -463,22 +505,121 @@ def _patch_voxcpm_audio_loader():
     except Exception as e:
         print(f"[Sori-Dam] VoxCPM2 오디오 로더 패치 경고: {e}")
 
-def get_model():
-    global _model
+_safetensors_patched = False
+_current_load_progress_cb = None
+
+def _patch_safetensors_loader():
+    global _safetensors_patched
+    if _safetensors_patched:
+        return
+    try:
+        import safetensors.torch
+        from safetensors import safe_open
+        import voxcpm.model.voxcpm2
+        import voxcpm.model.voxcpm
+
+        orig_load = safetensors.torch.load_file
+
+        def tracked_load_file(filename, device="cpu"):
+            cb = _current_load_progress_cb
+            if not cb or not isinstance(filename, (str, os.PathLike)) or not str(filename).endswith("model.safetensors"):
+                return orig_load(filename, device=device)
+
+            file_size = os.path.getsize(filename)
+            total_mb = round(file_size / (1024 * 1024), 1)
+            result = {}
+            last_t = 0
+            loaded_bytes = 0
+
+            with safe_open(filename, framework="pt", device=device) as f:
+                keys = f.offset_keys()
+                total_keys = len(keys)
+                for i, k in enumerate(keys):
+                    tensor = f.get_tensor(k)
+                    result[k] = tensor
+                    loaded_bytes += tensor.numel() * tensor.element_size()
+                    now = time.time()
+                    if now - last_t >= 0.12 or i == total_keys - 1:
+                        last_t = now
+                        loaded_mb = round(loaded_bytes / (1024 * 1024), 1)
+                        # 10% to 90%
+                        pct = min(90, 10 + int((loaded_bytes / max(file_size, 1)) * 80))
+                        cb(
+                            loaded_mb=loaded_mb,
+                            total_mb=total_mb,
+                            pct=pct,
+                            stage="loading_safetensors",
+                            msg=f"AI 모델 신경망 가중치 로드 중... ({loaded_mb:,.0f} MB / {total_mb:,.0f} MB)"
+                        )
+
+            if cb:
+                cb(
+                    loaded_mb=total_mb,
+                    total_mb=total_mb,
+                    pct=94,
+                    stage="optimizing",
+                    msg="신경망 가속 최적화 및 웜업 테스트 중..."
+                )
+
+            return result
+
+        safetensors.torch.load_file = tracked_load_file
+        voxcpm.model.voxcpm2.load_file = tracked_load_file
+        voxcpm.model.voxcpm.load_file = tracked_load_file
+        _safetensors_patched = True
+        print("[Sori-Dam] safetensors 실시간 진행률 후킹 완료")
+    except Exception as e:
+        print(f"[Sori-Dam] safetensors 후킹 경고: {e}")
+
+def get_model(progress_cb=None):
+    global _model, _current_load_progress_cb
     if _model is None:
+        _current_load_progress_cb = progress_cb
         try:
             from voxcpm import VoxCPM
             _patch_voxcpm_audio_loader()
+            _patch_safetensors_loader()
+
+            if progress_cb:
+                progress_cb(
+                    loaded_mb=0,
+                    total_mb=4580,
+                    pct=3,
+                    stage="init",
+                    msg="AI 음성 생성 모델(약 4.6GB) 로드 준비 중..."
+                )
+
             dev_str = "CPU"
             if torch.cuda.is_available():
                 dev_str = f"CUDA GPU ({torch.cuda.get_device_name(0)})"
             elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
                 dev_str = "Apple Silicon (MPS)"
             print(f"[Sori-Dam] VoxCPM2 모델 로드 중... (구동 장치: {dev_str})")
+
+            if progress_cb:
+                progress_cb(
+                    loaded_mb=377,
+                    total_mb=4580,
+                    pct=8,
+                    stage="vae",
+                    msg="오디오 VAE 신경망 디코더 로드 중 (약 377MB)..."
+                )
+
             _model = VoxCPM.from_pretrained("openbmb/VoxCPM2", load_denoiser=False)
+
+            if progress_cb:
+                progress_cb(
+                    loaded_mb=4580,
+                    total_mb=4580,
+                    pct=100,
+                    stage="done",
+                    msg="AI 모델 준비 완료! 음성 합성을 시작합니다."
+                )
             print("[Sori-Dam] VoxCPM2 모델 로드 완료!")
         except ImportError:
             raise RuntimeError("voxcpm 패키지가 설치되지 않았습니다. pip install voxcpm 을 실행하세요.")
+        finally:
+            _current_load_progress_cb = None
     return _model
 
 # ── AI 모델 사전 설치 및 범용 하드웨어 상태 진단 모듈 ──────────────────────────────────────────────
@@ -576,7 +717,7 @@ async def stream_preinstall():
                 "step_title": "준비 완료!",
                 "progress": 100,
                 "sub_progress": 100,
-                "message": "AI 음성 엔진이 이미 완벽하게 준비되어 메모리에 로드되어 있습니다. 🎉",
+                "message": "AI 음성 엔진이 이미 완벽하게 준비되어 메모리에 로드되어 있습니다.",
                 "character_action": "celebrating",
                 "done": True
             }
@@ -681,7 +822,7 @@ async def stream_preinstall():
             time.sleep(0.6)
 
             # ── 4단계: 완료! ──
-            emit(4, 4, "설치 및 환경 구성 완료!", 100, 100, "모든 사전 설치와 가속 최적화가 완벽하게 완료되었습니다! 🎉", "celebrating", done=True)
+            emit(4, 4, "설치 및 환경 구성 완료!", 100, 100, "모든 사전 설치와 가속 최적화가 완벽하게 완료되었습니다!", "celebrating", done=True)
             time.sleep(0.5)
 
         except Exception as e:
@@ -896,17 +1037,21 @@ async def generate_speech(
     speed: float = Form(1.0),
     session_id: str = Form(None),
 ):
+    global _main_loop
+    try:
+        _main_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+
     async def log(msg: str):
         if session_id:
-            q = _log_queues.get(session_id)
-            if q:
-                await q.put(msg)
+            q = _get_queue(session_id)
+            await q.put(msg)
 
     async def end_log():
         if session_id:
-            q = _log_queues.get(session_id)
-            if q:
-                await q.put(None)
+            q = _get_queue(session_id)
+            await q.put(None)
 
     text = text.strip()
     if not text:
@@ -935,7 +1080,23 @@ async def generate_speech(
 
     await log("⟳  AI 모델 확인 중...")
     try:
-        model = get_model()
+        def model_cb(loaded_mb, total_mb, pct, stage, msg):
+            evt = json.dumps({
+                "loaded_mb": loaded_mb,
+                "total_mb": total_mb,
+                "pct": pct,
+                "stage": stage,
+                "message": msg
+            }, ensure_ascii=False)
+            _push_log(session_id, f"[MODEL_PROGRESS] {evt}")
+
+        if _model is None:
+            model = await asyncio.get_event_loop().run_in_executor(
+                executor, lambda: get_model(progress_cb=model_cb)
+            )
+        else:
+            model = get_model()
+
         await log("✓  모델 준비 완료")
     except RuntimeError as e:
         await log(f"✗  모델 로드 실패: {e}")
