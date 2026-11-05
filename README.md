@@ -74,12 +74,12 @@
 | 항목 | macOS | Windows |
 |------|-------|---------|
 | **지원 OS** | macOS 13 (Ventura) 이상 | Windows 10 / 11 |
-| **칩셋** | Apple Silicon (M1/M2/M3/M4) ⚠️ Intel 미지원 | x64 (64비트) |
+| **칩셋** | Apple Silicon (M 시리즈) ⚠️ Intel 미지원 | x64 (64비트) |
 | **RAM** | 8GB 이상 권장 | 8GB 이상 권장 |
 | **저장공간** | 3GB 이상 여유 공간 | 3GB 이상 여유 공간 |
 | **인터넷** | 최초 모델 다운로드 시 필요 | 최초 모델 다운로드 시 필요 |
 
-> ⚠️ **macOS는 Apple Silicon (M 시리즈) 칩에서 잘 작동합니다.** Intel Mac은 지원하지 않을 수 있습니다.
+> ⚠️ **macOS는 Apple Silicon (M 시리즈) 칩에서 잘 작동합니다.** Intel Mac은 지원하지 않습니다.
 
 ---
 
