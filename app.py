@@ -1269,7 +1269,12 @@ async def get_youtube_info(url: str):
         raise HTTPException(400, "유튜브 URL을 입력하세요.")
     try:
         ydl_opts = {
-            'format': 'bestaudio',
+            'format': 'bestaudio/best',
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web']
+                }
+            },
             'quiet': True,
             'no_warnings': True,
         }
@@ -1294,7 +1299,6 @@ async def extract_youtube_audio(
     end_time: int = Form(...),
 ):
     import yt_dlp
-    import subprocess
     import shutil
 
     url = url.strip()
@@ -1317,75 +1321,69 @@ async def extract_youtube_audio(
         except Exception as e:
             print(f"Error removing temp wav: {e}")
 
-    # 2. yt-dlp를 이용해 오디오 스트림 다이렉트 URL 추출
-    try:
-        ydl_opts = {
-            'format': 'bestaudio',
-            'quiet': True,
-            'no_warnings': True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # extract_info가 네트워크 호출이므로 별도 스레드에서 돌려 FastAPI 비동기 성능 극대화
-            loop = asyncio.get_event_loop()
-            info = await loop.run_in_executor(None, lambda: ydl.extract_info(url, download=False))
-            stream_url = info.get('url')
-            if not stream_url:
-                # format 목록에서 찾아보기
-                formats = info.get('formats', [])
-                for f in formats:
-                    if f.get('acodec') != 'none' and f.get('url'):
-                        stream_url = f.get('url')
-                        break
-            if not stream_url:
-                raise HTTPException(400, "유튜브 오디오 스트림 URL을 찾을 수 없습니다.")
-    except Exception as e:
-        raise HTTPException(400, f"유튜브 링크 분석 실패: {str(e)}")
-
-    # 3. ffmpeg 바이너리 탐색
-    ffmpeg_bin = shutil.which("ffmpeg") or "ffmpeg"
-    for opt_path in ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]:
+    # 2. ffmpeg 바이너리 탐색
+    project_root = Path(__file__).parent.resolve()
+    ffmpeg_bin = shutil.which("ffmpeg")
+    for opt_path in [
+        project_root / "bin" / "ffmpeg",
+        project_root / "bin" / "ffmpeg.exe",
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "/usr/bin/ffmpeg",
+    ]:
         if Path(opt_path).exists():
-            ffmpeg_bin = opt_path
+            ffmpeg_bin = str(opt_path)
             break
 
-    # 4. ffmpeg 명령어로 스트림 다이렉트 크롭 & WAV 저장
+    # 3. yt-dlp를 이용해 지정 구간 다운로드 및 22050Hz 모노 WAV 변환
     temp_id = str(uuid.uuid4())
-    temp_file_path = TEMP_DIR / f"{temp_id}.wav"
+    temp_wav_path = TEMP_DIR / f"{temp_id}.wav"
+    outtmpl = str(TEMP_DIR / f"{temp_id}.%(ext)s")
 
-    # ffmpeg 실행 명령어 구성
-    cmd = [
-        ffmpeg_bin,
-        "-ss", str(start_time),
-        "-i", stream_url,
-        "-t", str(duration),
-        "-vn",
-        "-acodec", "pcm_s16le",
-        "-ac", "1",
-        "-ar", "22050",
-        "-y",
-        str(temp_file_path)
-    ]
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': outtmpl,
+        'download_ranges': lambda info_dict, ydl: [{'start_time': start_time, 'end_time': end_time}],
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web']
+            }
+        },
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'wav',
+        }],
+        'postprocessor_args': [
+            '-ar', '22050',
+            '-ac', '1'
+        ],
+        'quiet': True,
+        'no_warnings': True,
+    }
+    if ffmpeg_bin:
+        ydl_opts['ffmpeg_location'] = ffmpeg_bin
 
     try:
-        # ffmpeg 비동기 실행
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
-        stdout, stderr = await process.communicate()
+        loop = asyncio.get_event_loop()
+        def _download():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
 
-        if process.returncode != 0:
-            err_msg = stderr.decode('utf-8', errors='ignore')
-            print(f"FFmpeg error: {err_msg}")
-            raise HTTPException(500, f"오디오 트림 및 변환 실패 (FFmpeg 에러): {err_msg}")
+        await loop.run_in_executor(None, _download)
 
-        if not temp_file_path.exists() or temp_file_path.stat().st_size == 0:
+        # 파일 생성 확인 및 fallback
+        if not temp_wav_path.exists() or temp_wav_path.stat().st_size == 0:
+            found_wav = list(TEMP_DIR.glob(f"{temp_id}*.wav"))
+            if found_wav and found_wav[0].stat().st_size > 0:
+                found_wav[0].rename(temp_wav_path)
+
+        if not temp_wav_path.exists() or temp_wav_path.stat().st_size == 0:
             raise HTTPException(500, "추출된 오디오 파일이 비어있거나 생성되지 않았습니다.")
 
     except Exception as e:
         if isinstance(e, HTTPException):
             raise
+        print(f"YouTube extraction error: {e}")
         raise HTTPException(500, f"유튜브 오디오 추출 과정 실패: {str(e)}")
 
     return {
