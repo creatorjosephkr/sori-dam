@@ -4814,6 +4814,82 @@ function playTempRecording(item) {
     }
   }
 
+  // ── 소리담 첫 실행 안내(온보딩) 모달 ──────────────────────────────────────────
+  function openWelcomeModal(force = false) {
+    const modal = document.getElementById('welcomeModal');
+    if (!modal) return;
+    const chk = document.getElementById('welcomeDontShowAgain');
+    if (chk) {
+      chk.checked = localStorage.getItem('soridam_welcome_seen') === 'true';
+    }
+    modal.removeAttribute('hidden');
+    modal.style.display = 'flex';
+  }
+
+  function closeWelcomeModal() {
+    const modal = document.getElementById('welcomeModal');
+    if (modal) {
+      modal.setAttribute('hidden', 'true');
+      modal.style.display = 'none';
+    }
+    const chk = document.getElementById('welcomeDontShowAgain');
+    if (chk && chk.checked) {
+      localStorage.setItem('soridam_welcome_seen', 'true');
+    }
+  }
+
+  function handleWelcomeStart() {
+    closeWelcomeModal();
+    localStorage.setItem('soridam_welcome_seen', 'true');
+
+    // 모델 미설치 상태이고 사전 설치 안내를 본 적 없다면 자연스럽게 연결
+    if (_modelStatus && !_modelStatus.installed && localStorage.getItem('soridam_preinstall_prompted') !== 'true') {
+      localStorage.setItem('soridam_preinstall_prompted', 'true');
+      setTimeout(() => {
+        openPreinstallModal('intro');
+      }, 400);
+    }
+  }
+
+  function bindWelcomeEvents() {
+    const btnStart = document.getElementById('btnWelcomeStart');
+    if (btnStart) {
+      btnStart.onclick = handleWelcomeStart;
+    }
+
+    const btnClose = document.getElementById('btnWelcomeClose');
+    if (btnClose) {
+      btnClose.onclick = closeWelcomeModal;
+    }
+
+    const modal = document.getElementById('welcomeModal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          closeWelcomeModal();
+        }
+      });
+    }
+
+    const chk = document.getElementById('welcomeDontShowAgain');
+    if (chk) {
+      chk.onchange = () => {
+        if (chk.checked) {
+          localStorage.setItem('soridam_welcome_seen', 'true');
+        } else {
+          localStorage.removeItem('soridam_welcome_seen');
+        }
+      };
+    }
+
+    const btnHelp = document.getElementById('btnHelpGuide');
+    if (btnHelp) {
+      btnHelp.onclick = () => openWelcomeModal(true);
+    }
+  }
+
+  window.openWelcomeModal = openWelcomeModal;
+
   function openPreinstallModal(forceView = null) {
     const modal = document.getElementById('preinstallModal');
     if (!modal) return;
@@ -4887,8 +4963,8 @@ function playTempRecording(item) {
         if (btnLabel) btnLabel.textContent = '사전 설치';
         if (banner) banner.hidden = false;
 
-        // 최초 1회 자동 팝업
-        if (!silent && localStorage.getItem('soridam_preinstall_prompted') !== 'true') {
+        // 최초 1회 자동 팝업 (시작 안내를 이미 본 경우에만 바로 표시)
+        if (!silent && localStorage.getItem('soridam_welcome_seen') === 'true' && localStorage.getItem('soridam_preinstall_prompted') !== 'true') {
           localStorage.setItem('soridam_preinstall_prompted', 'true');
           setTimeout(() => {
             openPreinstallModal('intro');
@@ -5143,8 +5219,16 @@ function playTempRecording(item) {
   }
 
   // 초기화 호출
+  bindWelcomeEvents();
   bindPreinstallEvents();
   checkModelStatus();
+
+  // 최초 1회 시작 안내 가이드 팝업
+  if (localStorage.getItem('soridam_welcome_seen') !== 'true') {
+    setTimeout(() => {
+      openWelcomeModal();
+    }, 300);
+  }
 
   showPage('home');
 })();

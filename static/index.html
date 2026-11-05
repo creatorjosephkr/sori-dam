@@ -23,6 +23,10 @@
           <span id="btnModelSetupLabel" style="font-size: 11.5px; font-weight: 700;">AI 모델</span>
           <span id="btnModelSetupDot" style="width: 7px; height: 7px; border-radius: 50%; background: #ff9500; display: inline-block;"></span>
         </button>
+        <!-- 시작 가이드 / 도움말 -->
+        <button class="btn-header-ctrl" id="btnHelpGuide" title="시작 안내 가이드" onclick="openWelcomeModal(true)" style="display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; font-weight: 800; font-size: 13.5px;">
+          <span>?</span>
+        </button>
         <!-- 다크/라이트 모드 전환 -->
         <button class="btn-header-ctrl" id="btnTheme" title="다크/라이트 모드 전환" onclick="setTheme(_theme==='dark'?'light':'dark')">
           <span id="btnThemeIcon">🌙</span>
@@ -254,8 +258,8 @@
                       <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
                     </svg>
                   </div>
-                  <div class="feature-title" data-i18n="home.feat1.title">기본 음성 6종</div>
-                  <div class="feature-desc" data-i18n="home.feat1.desc">남녀 각 3가지 기본 AI 음색 제공</div>
+                  <div class="feature-title" data-i18n="home.feat1.title">성우 직접 생성</div>
+                  <div class="feature-desc" data-i18n="home.feat1.desc">음성 스타일 지정으로 나만의 성우 무제한 제작</div>
                 </div>
 
                 <div class="home-feature">
@@ -854,6 +858,85 @@
 
   <!-- ── 토스트 ── -->
   <div class="toast" id="toast" hidden></div>
+
+  <!-- ── 소리담 첫 실행 안내(웰컴 온보딩) 모달 ── -->
+  <div class="modal-overlay" id="welcomeModal" hidden style="z-index: 9998;">
+    <div class="welcome-box">
+      <button class="btn-modal-close" id="btnWelcomeClose" title="닫기" aria-label="닫기">✕</button>
+
+      <div class="welcome-header">
+        <div class="welcome-badge">
+          <span>✨</span>
+          <span data-i18n="welcome.badge">소리담 첫 시작 가이드</span>
+        </div>
+        <h2 class="welcome-title" data-i18n="welcome.title">소리담(Sori-Dam)에 오신 것을 환영합니다! 🎙️</h2>
+        <p class="welcome-subtitle" data-i18n="welcome.subtitle">자유롭게 나만의 AI 성우를 만들고 무제한으로 음성을 생성해보세요.</p>
+      </div>
+
+      <div class="welcome-cards">
+        <!-- 1. 직접 만드는 나만의 성우 -->
+        <div class="welcome-card">
+          <div class="welcome-card-icon welcome-icon-voice">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+              <line x1="8" y1="22" x2="16" y2="22"/>
+            </svg>
+          </div>
+          <div class="welcome-card-body">
+            <h3 class="welcome-card-title" data-i18n="welcome.sec1.title">직접 만드는 나만의 성우</h3>
+            <p class="welcome-card-desc" data-i18n="welcome.sec1.desc">
+              소리담에는 고정된 기본 성우가 없습니다. 원하는 <strong>음성 스타일을 텍스트로 지정</strong>하여 새로운 성우를 직접 생성하거나, <strong>내 목소리(3초~30초)를 등록</strong>하여 나만의 전속 성우로 무제한 활용할 수 있습니다.
+            </p>
+          </div>
+        </div>
+
+        <!-- 2. 첫 생성 시 모델 로딩 시간 안내 -->
+        <div class="welcome-card">
+          <div class="welcome-card-icon welcome-icon-speed">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+          </div>
+          <div class="welcome-card-body">
+            <h3 class="welcome-card-title" data-i18n="welcome.sec2.title">첫 생성 시 모델 로딩 시간 안내</h3>
+            <p class="welcome-card-desc" data-i18n="welcome.sec2.desc">
+              처음 음성을 생성할 때, 거대 고품질 AI 모델(VoxCPM2, 약 4.6GB)을 시스템 메모리에 로드하므로 <strong>최초 1회만 약 30초~수 분이 소요</strong>될 수 있습니다. 멈춘 것이 아니며, 이후부터는 메모리 캐시 덕분에 <strong>매우 빠르고 쾌적하게 음성이 생성</strong>됩니다.
+            </p>
+          </div>
+        </div>
+
+        <!-- 3. 100% 무료 & 오픈소스 라이선스 -->
+        <div class="welcome-card">
+          <div class="welcome-card-icon welcome-icon-free">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/>
+              <path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/>
+              <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"/>
+            </svg>
+          </div>
+          <div class="welcome-card-body">
+            <h3 class="welcome-card-title" data-i18n="welcome.sec3.title">100% 무료 & 오픈소스 라이선스</h3>
+            <p class="welcome-card-desc" data-i18n="welcome.sec3.desc">
+              소리담은 누구나 제한 없이 자유롭게 이용할 수 있는 <strong>100% 완전 무료 오픈소스</strong>입니다. 개인 및 상업적 콘텐츠 제작에 자유롭게 활용하실 수 있으며, <strong>출처 표기(소리담 / GitHub 저장소)</strong>를 지켜주시면 소스코드 수정 및 배포도 자유롭습니다.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 하단 액션 바 -->
+      <div class="welcome-footer">
+        <label class="welcome-dont-show">
+          <input type="checkbox" id="welcomeDontShowAgain">
+          <span data-i18n="welcome.dontShow">다시 보지 않기</span>
+        </label>
+        <button class="btn btn-primary" id="btnWelcomeStart" style="padding: 11px 24px; font-weight: 700; font-size: 14px; border-radius: 12px; display: inline-flex; align-items: center; gap: 8px;">
+          <span data-i18n="welcome.btnStart">소리담 시작하기 🚀</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- ── AI 모델 사전 설치 및 하드웨어 환경 최적화 마법사 모달 ── -->
   <div class="modal-overlay" id="preinstallModal" hidden style="z-index: 9998;">

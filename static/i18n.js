@@ -7,6 +7,7 @@ const TRANSLATIONS = {
     'header.quit': '앱 종료',
     // 사이드바 브랜드
     'sidebar.appName': '소리담',
+    'header.help': '시작 안내 가이드',
     // 사이드바 네비게이션
     'nav.home': '소개',
     'nav.create': '음성 만들기',
@@ -37,8 +38,8 @@ const TRANSLATIONS = {
     'home.desc': '완전히 내 컴퓨터 안에서만 동작하는 로컬 AI 음성 생성기입니다.',
     'home.btnCreate': '음성 만들기',
     'home.btnRegister': '내 목소리 등록하기',
-    'home.feat1.title': '기본 음성 6종',
-    'home.feat1.desc': '남녀 각 3가지 기본 AI 음색 제공',
+    'home.feat1.title': '성우 직접 생성',
+    'home.feat1.desc': '음성 스타일 지정으로 나만의 성우 무제한 제작',
     'home.feat2.title': '내 음성 복제',
     'home.feat2.desc': '참조 음성으로 나만의 AI 음성 생성',
     'home.feat3.title': '스타일 제어',
@@ -180,6 +181,18 @@ const TRANSLATIONS = {
     'update.latest': '최신 버전',
     'update.btnDownload': '다운로드 페이지로 이동',
     'update.btnLater': '나중에 하기',
+    // 소리담 첫 시작 가이드 (웰컴 모달)
+    'welcome.badge': '소리담 첫 시작 가이드',
+    'welcome.title': '소리담(Sori-Dam)에 오신 것을 환영합니다! 🎙️',
+    'welcome.subtitle': '자유롭게 나만의 AI 성우를 만들고 무제한으로 음성을 생성해보세요.',
+    'welcome.sec1.title': '직접 만드는 나만의 성우',
+    'welcome.sec1.desc': '소리담에는 고정된 기본 성우가 없습니다. 원하는 <strong>음성 스타일을 텍스트로 지정</strong>하여 새로운 성우를 직접 생성하거나, <strong>내 목소리(3초~30초)를 등록</strong>하여 나만의 전속 성우로 무제한 활용할 수 있습니다.',
+    'welcome.sec2.title': '첫 생성 시 모델 로딩 시간 안내',
+    'welcome.sec2.desc': '앱 실행 후 첫 음성을 생성할 때 거대 AI 모델(약 4.6GB)을 시스템 메모리에 로드하므로 <strong>최초 1회만 약 30초~수 분이 소요</strong>될 수 있습니다. 멈춘 것이 아니며, 이후부터는 메모리 캐시 덕분에 <strong>매우 빠르고 쾌적하게 생성</strong>됩니다.',
+    'welcome.sec3.title': '100% 무료 & 오픈소스 라이선스',
+    'welcome.sec3.desc': '소리담은 누구나 제한 없이 자유롭게 이용할 수 있는 <strong>100% 완전 무료 오픈소스</strong>입니다. 개인 및 상업적 콘텐츠 제작에 자유롭게 활용하실 수 있으며, <strong>출처 표기(소리담 / GitHub 저장소)</strong>를 지켜주시면 소스코드 수정 및 배포도 자유롭습니다.',
+    'welcome.dontShow': '다시 보지 않기',
+    'welcome.btnStart': '소리담 시작하기 🚀',
     // AI 모델 사전 설치 마법사
     'preinstall.badge': '하드웨어 가속 및 AI 모델 사전 최적화',
     'preinstall.introTitle': '소리담 첫 시작을 환영합니다! 🎙️',
@@ -213,6 +226,7 @@ const TRANSLATIONS = {
     'header.quit': 'Quit App',
     // Sidebar brand
     'sidebar.appName': 'Sori-Dam',
+    'header.help': 'Quick Guide',
     // Sidebar nav
     'nav.home': 'About',
     'nav.create': 'Create Voice',
@@ -243,8 +257,8 @@ const TRANSLATIONS = {
     'home.desc': 'A fully local AI voice generator that runs entirely on your computer.',
     'home.btnCreate': 'Create Voice',
     'home.btnRegister': 'Register My Voice',
-    'home.feat1.title': '6 Built-in Voices',
-    'home.feat1.desc': '3 male + 3 female default AI voice tones',
+    'home.feat1.title': 'Custom Voice Design',
+    'home.feat1.desc': 'Design unlimited custom voice actors via style prompts',
     'home.feat2.title': 'Voice Cloning',
     'home.feat2.desc': 'Create your own AI voice from a reference recording',
     'home.feat3.title': 'Style Control',
@@ -379,13 +393,25 @@ const TRANSLATIONS = {
     'voice.name.male_standard': 'Male – Standard',
     'voice.name.male_calm': 'Male – Calm',
     'voice.name.male_strong': 'Male – Strong',
-    // 업데이트 팝업 번역
-    'update.title': '새로운 업데이트 소식 🚀',
-    'update.body': '새로운 버전이 준비되었습니다. 지금 다운로드하여 최신 인공지능 기능과 개선사항을 경험해보세요!',
-    'update.current': '현재 버전',
-    'update.latest': '최신 버전',
-    'update.btnDownload': '다운로드 페이지로 이동',
-    'update.btnLater': '나중에 하기',
+    // Update Notification
+    'update.title': 'New Update Available 🚀',
+    'update.body': 'A new version is available! Download now to experience the latest AI features and improvements.',
+    'update.current': 'Current Version',
+    'update.latest': 'Latest Version',
+    'update.btnDownload': 'Go to Download Page',
+    'update.btnLater': 'Later',
+    // Welcome Guide Modal
+    'welcome.badge': 'Sori-Dam Quick Guide',
+    'welcome.title': 'Welcome to Sori-Dam! 🎙️',
+    'welcome.subtitle': 'Create your own custom AI voice actors freely and generate unlimited voices.',
+    'welcome.sec1.title': 'Custom AI Voice Actors',
+    'welcome.sec1.desc': 'Sori-Dam has no fixed default actors. Design your own voices with <strong>natural language style prompts</strong>, or <strong>register your own voice (3-30s)</strong> to create custom cloned actors.',
+    'welcome.sec2.title': 'Model Loading on First Run',
+    'welcome.sec2.desc': 'When generating voice for the first time, loading the 4.6GB AI model into memory takes <strong>30s to a few minutes for the first time only</strong>. It has not frozen! Subsequent generations will be lightning fast.',
+    'welcome.sec3.title': '100% Free & Open Source',
+    'welcome.sec3.desc': 'Sori-Dam is <strong>100% completely free and open-source</strong> for everyone (commercial and personal use). You are free to modify and redistribute source code with proper <strong>attribution (Sori-Dam / GitHub repository)</strong>.',
+    'welcome.dontShow': 'Do not show again',
+    'welcome.btnStart': 'Get Started 🚀',
     // AI Model Pre-installation Wizard
     'preinstall.badge': 'Hardware Acceleration & Model Optimization',
     'preinstall.introTitle': 'Welcome to Sori-Dam! 🎙️',
@@ -431,6 +457,8 @@ function applyI18n() {
     const val = t(key);
     if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
       if (el.hasAttribute('placeholder')) el.placeholder = val;
+    } else if (el.hasAttribute('data-i18n-html') || (typeof val === 'string' && val.includes('<'))) {
+      el.innerHTML = val;
     } else {
       el.textContent = val;
     }

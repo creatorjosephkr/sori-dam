@@ -2407,3 +2407,176 @@ details[open] .advanced-toggle::before { transform: rotate(90deg); }
   100% { transform: translateY(0); opacity: 1; }
 }
 
+/* ── 소리담 첫 실행 안내(온보딩) 모달 ────────────────────────────────────────── */
+.welcome-box {
+  width: min(640px, 94vw);
+  max-height: 90vh;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22), 0 2px 10px rgba(0, 0, 0, 0.06);
+  padding: 30px 32px 24px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  position: relative;
+  user-select: none;
+  animation: preinstallPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.welcome-box .btn-modal-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(120, 120, 128, 0.12);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.welcome-box .btn-modal-close:hover {
+  background: rgba(120, 120, 128, 0.24);
+  color: var(--text-primary);
+}
+
+.welcome-header {
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.welcome-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(0, 113, 227, 0.08);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  width: fit-content;
+  margin-bottom: 10px;
+}
+
+.welcome-title {
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.4px;
+  margin-bottom: 6px;
+}
+
+.welcome-subtitle {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.welcome-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.welcome-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.welcome-card:hover {
+  border-color: rgba(0, 113, 227, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.welcome-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.welcome-icon-voice {
+  background: rgba(0, 113, 227, 0.1);
+  color: var(--accent);
+}
+
+.welcome-icon-speed {
+  background: rgba(255, 149, 0, 0.12);
+  color: #ff9500;
+}
+
+.welcome-icon-free {
+  background: rgba(52, 199, 89, 0.12);
+  color: #34c759;
+}
+
+.welcome-card-body {
+  flex: 1;
+}
+
+.welcome-card-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.welcome-card-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.welcome-card-desc strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.welcome-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-light);
+  margin-top: 4px;
+}
+
+.welcome-dont-show {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.welcome-dont-show input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+
