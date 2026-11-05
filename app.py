@@ -691,16 +691,19 @@ def _patch_voxcpm_audio_loader():
 
 _safetensors_patched = False
 _current_load_progress_cb = None
+_model_load_lock = threading.Lock()
 
 def _patch_safetensors_loader():
     global _safetensors_patched
     if _safetensors_patched:
         return
     try:
+        import torch.nn as nn
         import safetensors.torch
         from safetensors import safe_open
         import voxcpm.model.voxcpm2
         import voxcpm.model.voxcpm
+        from voxcpm.model.voxcpm2 import VoxCPM2Model, VoxCPMConfig, AudioVAEV2, LlamaTokenizerFast, get_dtype, resolve_runtime_device, pick_runtime_dtype
 
         orig_load = safetensors.torch.load_file
 
@@ -726,7 +729,6 @@ def _patch_safetensors_loader():
                     if now - last_t >= 0.12 or i == total_keys - 1:
                         last_t = now
                         loaded_mb = round(loaded_bytes / (1024 * 1024), 1)
-                        # 10% to 90%
                         pct = min(90, 10 + int((loaded_bytes / max(file_size, 1)) * 80))
                         cb(
                             loaded_mb=loaded_mb,
@@ -747,17 +749,150 @@ def _patch_safetensors_loader():
 
             return result
 
+        @classmethod
+        def fast_from_local(
+            cls,
+            path: str,
+            optimize: bool = True,
+            training: bool = False,
+            device: str = None,
+            lora_config = None,
+        ):
+            cb = _current_load_progress_cb
+            with open(os.path.join(path, "config.json"), "r", encoding="utf-8") as _cfg_f:
+                config = VoxCPMConfig.model_validate_json(_cfg_f.read())
+            tokenizer = LlamaTokenizerFast.from_pretrained(path)
+            audio_vae_config = getattr(config, "audio_vae_config", None)
+            audio_vae = AudioVAEV2(config=audio_vae_config) if audio_vae_config else AudioVAEV2()
+
+            audiovae_safetensors_path = os.path.join(path, "audiovae.safetensors")
+            audiovae_pth_path = os.path.join(path, "audiovae.pth")
+            if os.path.exists(audiovae_safetensors_path):
+                vae_state_dict = orig_load(audiovae_safetensors_path, device="cpu")
+            elif os.path.exists(audiovae_pth_path):
+                checkpoint = torch.load(audiovae_pth_path, map_location="cpu", weights_only=True)
+                vae_state_dict = checkpoint.get("state_dict", checkpoint)
+                del checkpoint
+            else:
+                raise FileNotFoundError(f"AudioVAE checkpoint not found in {path}")
+
+            audio_vae.load_state_dict(vae_state_dict, strict=False)
+            del vae_state_dict
+
+            if cb:
+                cb(
+                    loaded_mb=377,
+                    total_mb=4580,
+                    pct=10,
+                    stage="init_skeleton",
+                    msg="오디오 VAE 로드 완료! 거대 언어 신경망(2B) 메모리 구조 준비 중..."
+                )
+
+            resolved_dev = resolve_runtime_device(device, config.device)
+            resolved_dt_str = pick_runtime_dtype(resolved_dev, config.dtype)
+            lm_dtype = get_dtype(resolved_dt_str)
+
+            # 22억 개 파라미터의 불필요한 kaiming_uniform_ 난수 초기화를 생략하여 CPU 프리징 및 메모리 스래싱 방지
+            orig_resets = {}
+            for m_cls in (nn.Linear, nn.Embedding):
+                orig_resets[m_cls] = m_cls.reset_parameters
+                m_cls.reset_parameters = lambda self: None
+            prev_default_dtype = torch.get_default_dtype()
+            try:
+                if not training:
+                    torch.set_default_dtype(lm_dtype)
+                model = cls(config, tokenizer, audio_vae, lora_config, device=device)
+            finally:
+                torch.set_default_dtype(prev_default_dtype)
+                for m_cls, fn in orig_resets.items():
+                    m_cls.reset_parameters = fn
+
+            if not training:
+                model = model.to(lm_dtype)
+            model.audio_vae = model.audio_vae.to(torch.float32)
+
+            safetensors_path = os.path.join(path, "model.safetensors")
+            pytorch_model_path = os.path.join(path, "pytorch_model.bin")
+
+            if os.path.exists(safetensors_path):
+                file_size = os.path.getsize(safetensors_path)
+                total_mb = round(file_size / (1024 * 1024), 1)
+                last_t = 0
+                loaded_bytes = 0
+                params_map = dict(model.named_parameters())
+                buffers_map = dict(model.named_buffers())
+
+                # 4.2GB 전체 dict를 중복 할당하지 않고 텐서 단위로 즉시 스트리밍 주입 (메모리 사용량 50% 절감)
+                with safe_open(safetensors_path, framework="pt", device="cpu") as f:
+                    keys = f.offset_keys()
+                    total_keys = len(keys)
+                    for i, k in enumerate(keys):
+                        tensor = f.get_tensor(k)
+                        loaded_bytes += tensor.numel() * tensor.element_size()
+                        if k in params_map:
+                            p = params_map[k]
+                            if p.device.type == "cpu" and p.dtype == tensor.dtype:
+                                p.data = tensor
+                            else:
+                                p.data.copy_(tensor)
+                        elif k in buffers_map:
+                            b = buffers_map[k]
+                            if b.device.type == "cpu" and b.dtype == tensor.dtype:
+                                b.data = tensor
+                            else:
+                                b.data.copy_(tensor)
+                        del tensor
+
+                        if cb:
+                            now = time.time()
+                            if now - last_t >= 0.12 or i == total_keys - 1:
+                                last_t = now
+                                loaded_mb = round(loaded_bytes / (1024 * 1024), 1)
+                                pct = min(92, 12 + int((loaded_bytes / max(file_size, 1)) * 80))
+                                cb(
+                                    loaded_mb=loaded_mb,
+                                    total_mb=total_mb,
+                                    pct=pct,
+                                    stage="loading_safetensors",
+                                    msg=f"AI 모델 신경망 가중치 로드 중... ({loaded_mb:,.0f} MB / {total_mb:,.0f} MB)"
+                                )
+            elif os.path.exists(pytorch_model_path):
+                checkpoint = torch.load(pytorch_model_path, map_location="cpu", weights_only=True)
+                model_state_dict = checkpoint.get("state_dict", checkpoint)
+                model.load_state_dict(model_state_dict, strict=False)
+                del model_state_dict, checkpoint
+            else:
+                raise FileNotFoundError(f"Model file not found in {path}")
+
+            if cb:
+                cb(
+                    loaded_mb=4580,
+                    total_mb=4580,
+                    pct=95,
+                    stage="optimizing",
+                    msg="신경망 가속 장치 배치 및 최적화 마무리 중..."
+                )
+
+            if training:
+                return model
+            return model.to(model.device).eval().optimize(disable=not optimize)
+
         safetensors.torch.load_file = tracked_load_file
         voxcpm.model.voxcpm2.load_file = tracked_load_file
         voxcpm.model.voxcpm.load_file = tracked_load_file
+        VoxCPM2Model.from_local = fast_from_local
         _safetensors_patched = True
-        print("[Sori-Dam] safetensors 실시간 진행률 후킹 완료")
+        print("[Sori-Dam] safetensors 저메모리 고속 스트리밍 로더 후킹 완료", flush=True)
     except Exception as e:
-        print(f"[Sori-Dam] safetensors 후킹 경고: {e}")
+        print(f"[Sori-Dam] safetensors 후킹 경고: {e}", flush=True)
 
 def get_model(progress_cb=None):
     global _model, _current_load_progress_cb
-    if _model is None:
+    if _model is not None:
+        return _model
+    with _model_load_lock:
+        if _model is not None:
+            return _model
         _current_load_progress_cb = progress_cb
         ensure_voxcpm_patched()
         try:
