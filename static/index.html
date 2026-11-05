@@ -139,6 +139,17 @@
             <span class="nav-label" data-i18n="donate.paypal">PayPal 후원 💙</span>
           </a>
         </div>
+        <!-- 개인정보처리방침 -->
+        <div class="privacy-wrap" style="padding: 0 8px 4px;">
+          <button id="btnPrivacyPolicy" class="nav-item btn-privacy" style="font-size: 11.5px; font-weight: 500; padding: 6px 10px; color: var(--text-secondary); border-radius: 8px; justify-content: flex-start; gap: 8px;" title="개인정보처리방침">
+            <span class="nav-icon" style="width: 17px; display: inline-flex; justify-content: center;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </span>
+            <span class="nav-label" data-i18n="footer.privacy">개인정보처리방침</span>
+          </button>
+        </div>
         <button class="nav-item sidebar-toggle" id="sidebarToggle" aria-label="사이드바 접기/펼치기">
           <span class="nav-icon sidebar-toggle-icon">
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -933,6 +944,80 @@
         </label>
         <button class="btn btn-primary" id="btnWelcomeStart" style="padding: 11px 24px; font-weight: 700; font-size: 14px; border-radius: 12px; display: inline-flex; align-items: center; gap: 8px;">
           <span data-i18n="welcome.btnStart">소리담 시작하기 🚀</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 개인정보처리방침 모달 ── -->
+  <div class="modal-overlay" id="privacyModal" hidden style="z-index: 9998;">
+    <div class="privacy-box">
+      <button class="btn-modal-close" id="btnPrivacyClose" title="닫기" aria-label="닫기">✕</button>
+
+      <div class="privacy-header">
+        <div class="privacy-badge">
+          <span>🔒</span>
+          <span data-i18n="privacy.badge">100% 로컬 프라이버시 보호</span>
+        </div>
+        <h2 class="privacy-title" data-i18n="privacy.title">소리담 개인정보처리방침 🛡️</h2>
+        <p class="privacy-subtitle" data-i18n="privacy.subtitle">소리담은 사용자의 어떠한 정보도 수집하거나 외부 서버에 전송하지 않습니다.</p>
+      </div>
+
+      <div class="privacy-cards">
+        <!-- 1. 외부 서버 전송 없음 -->
+        <div class="privacy-card">
+          <div class="privacy-card-icon" style="background: rgba(52, 199, 89, 0.12); color: #34c759;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+          <div class="privacy-card-body">
+            <h3 class="privacy-card-title" data-i18n="privacy.sec1.title">어떠한 정보도 수집 및 외부 전송하지 않습니다</h3>
+            <p class="privacy-card-desc" data-i18n="privacy.sec1.desc">
+              소리담은 <strong>회원가입이나 로그인이 전혀 필요 없으며</strong>, 사용자가 입력한 텍스트, 녹음하거나 추출한 음성 데이터, 생성된 오디오 파일 등 어떠한 정보도 <strong>외부 서버나 클라우드로 전송하지 않습니다</strong>.
+            </p>
+          </div>
+        </div>
+
+        <!-- 2. 100% 온디바이스 로컬 처리 -->
+        <div class="privacy-card">
+          <div class="privacy-card-icon" style="background: rgba(0, 113, 227, 0.1); color: var(--accent);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+          </div>
+          <div class="privacy-card-body">
+            <h3 class="privacy-card-title" data-i18n="privacy.sec2.title">100% 온디바이스 로컬 독립 구동</h3>
+            <p class="privacy-card-desc" data-i18n="privacy.sec2.desc">
+              인공지능 음성 생성 엔진(VoxCPM2)은 <strong>오직 사용자의 컴퓨터 내부 하드웨어(CPU/GPU/MPS)에서만 직접 실행</strong>됩니다. 인터넷 연결이 차단된 오프라인 상태에서도 완벽하게 동작합니다.
+            </p>
+          </div>
+        </div>
+
+        <!-- 3. 완전한 데이터 통제권 및 로컬 저장 -->
+        <div class="privacy-card">
+          <div class="privacy-card-icon" style="background: rgba(142, 142, 147, 0.12); color: var(--text-secondary);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="5" rx="9" ry="3"/>
+              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+            </svg>
+          </div>
+          <div class="privacy-card-body">
+            <h3 class="privacy-card-title" data-i18n="privacy.sec3.title">데이터 보관 및 완전한 삭제 권리</h3>
+            <p class="privacy-card-desc" data-i18n="privacy.sec3.desc">
+              음성 생성 기록 및 등록된 성우 데이터는 <strong>오직 내 컴퓨터의 로컬 데이터 폴더에만 보관</strong>됩니다. 사용자가 원할 때 언제든 개별 삭제할 수 있으며, 앱 삭제 시 모든 데이터는 함께 완전히 파기됩니다.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 하단 액션 바 -->
+      <div class="privacy-footer">
+        <button class="btn btn-primary" id="btnPrivacyConfirm" style="width: 100%; padding: 11px 20px; font-weight: 700; font-size: 14px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+          <span data-i18n="privacy.btnConfirm">확인</span>
         </button>
       </div>
     </div>

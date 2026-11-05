@@ -18,6 +18,7 @@ const TRANSLATIONS = {
     // 후원
     'donate.kakao': '커피 한 잔의 후원 ☕',
     'donate.paypal': 'PayPal 후원 💙',
+    'footer.privacy': '개인정보처리방침',
     // 소개 페이지
     'home.badge': '완전 무료 · 로컬 AI',
     'home.appName': '소리담',
@@ -216,6 +217,17 @@ const TRANSLATIONS = {
     'preinstall.alreadyTitle': 'AI 음성 모델이 준비되어 있습니다 ✅',
     'banner.modelTitle': 'AI 음성 생성 모델(약 4.6GB)이 아직 사전 설치되지 않았습니다.',
     'banner.modelDesc': '첫 음성 생성 시 모델 다운로드로 수 분이 걸릴 수 있습니다. 귀여운 안내와 함께 미리 준비해보세요!',
+    // 개인정보처리방침 모달
+    'privacy.badge': '100% 로컬 프라이버시 보호',
+    'privacy.title': '소리담 개인정보처리방침 🛡️',
+    'privacy.subtitle': '소리담은 사용자의 어떠한 정보도 수집하거나 외부 서버에 전송하지 않습니다.',
+    'privacy.sec1.title': '어떠한 정보도 수집 및 외부 전송하지 않습니다',
+    'privacy.sec1.desc': '소리담은 <strong>회원가입이나 로그인이 전혀 필요 없으며</strong>, 사용자가 입력한 텍스트, 녹음하거나 추출한 음성 데이터, 생성된 오디오 파일 등 어떠한 정보도 <strong>외부 서버나 클라우드로 전송하지 않습니다</strong>.',
+    'privacy.sec2.title': '100% 온디바이스 로컬 독립 구동',
+    'privacy.sec2.desc': '인공지능 음성 생성 엔진(VoxCPM2)은 <strong>오직 사용자의 컴퓨터 내부 하드웨어(CPU/GPU/MPS)에서만 직접 실행</strong>됩니다. 인터넷 연결이 차단된 오프라인 상태에서도 완벽하게 동작합니다.',
+    'privacy.sec3.title': '데이터 보관 및 완전한 삭제 권리',
+    'privacy.sec3.desc': '음성 생성 기록 및 등록된 성우 데이터는 <strong>오직 내 컴퓨터의 로컬 데이터 폴더에만 보관</strong>됩니다. 사용자가 원할 때 언제든 개별 삭제할 수 있으며, 앱 삭제 시 모든 데이터는 함께 완전히 파기됩니다.',
+    'privacy.btnConfirm': '확인',
     // 푸터
     'footer.copyright': 'Copyright © 2026 크리에이터 요셉 (creatorjoseph@kakao.com)',
   },
@@ -237,6 +249,7 @@ const TRANSLATIONS = {
     // Donate
     'donate.kakao': 'Buy Me a Coffee ☕',
     'donate.paypal': 'PayPal Donate 💙',
+    'footer.privacy': 'Privacy Policy',
     // Home page
     'home.badge': 'Free · Local AI',
     'home.appName': 'Sori-Dam',
@@ -435,6 +448,17 @@ const TRANSLATIONS = {
     'preinstall.alreadyTitle': 'AI Voice Model is Ready ✅',
     'banner.modelTitle': 'AI Voice Model (~4.6GB) has not been pre-installed yet.',
     'banner.modelDesc': 'First generation may take several minutes to download. Prepare in advance with friendly guide!',
+    // Privacy Policy Modal
+    'privacy.badge': '100% Local Privacy Protection',
+    'privacy.title': 'Sori-Dam Privacy Policy 🛡️',
+    'privacy.subtitle': 'Sori-Dam does not collect or transmit any of your personal information to external servers.',
+    'privacy.sec1.title': 'Zero Data Collection & Transmission',
+    'privacy.sec1.desc': 'Sori-Dam <strong>does not require any sign-up or login</strong>. Any text you enter, voices you record/extract, and generated audios are <strong>never sent to any external server or cloud</strong>.',
+    'privacy.sec2.title': '100% On-Device Local Processing',
+    'privacy.sec2.desc': 'The AI voice model (VoxCPM2) runs <strong>strictly on your local computer hardware (CPU/GPU/MPS)</strong>. It operates completely offline with zero internet access required.',
+    'privacy.sec3.title': 'Data Retention & Full Deletion Rights',
+    'privacy.sec3.desc': 'Generated recordings and voice models are <strong>stored exclusively in your local app data folder</strong>. You can view, export, or delete them anytime, and uninstalling removes all data completely.',
+    'privacy.btnConfirm': 'Close',
     // Footer
     'footer.copyright': 'Copyright © 2026 Creator Joseph (creatorjoseph@kakao.com)',
   }

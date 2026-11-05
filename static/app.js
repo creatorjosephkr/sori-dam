@@ -4890,6 +4890,50 @@ function playTempRecording(item) {
 
   window.openWelcomeModal = openWelcomeModal;
 
+  // ── 개인정보처리방침 모달 ──────────────────────────────────────────
+  function openPrivacyModal() {
+    const modal = document.getElementById('privacyModal');
+    if (!modal) return;
+    modal.removeAttribute('hidden');
+    modal.style.display = 'flex';
+  }
+
+  function closePrivacyModal() {
+    const modal = document.getElementById('privacyModal');
+    if (modal) {
+      modal.setAttribute('hidden', 'true');
+      modal.style.display = 'none';
+    }
+  }
+
+  function bindPrivacyEvents() {
+    const btnPrivacy = document.getElementById('btnPrivacyPolicy');
+    if (btnPrivacy) {
+      btnPrivacy.onclick = openPrivacyModal;
+    }
+
+    const btnConfirm = document.getElementById('btnPrivacyConfirm');
+    if (btnConfirm) {
+      btnConfirm.onclick = closePrivacyModal;
+    }
+
+    const btnClose = document.getElementById('btnPrivacyClose');
+    if (btnClose) {
+      btnClose.onclick = closePrivacyModal;
+    }
+
+    const modal = document.getElementById('privacyModal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          closePrivacyModal();
+        }
+      });
+    }
+  }
+
+  window.openPrivacyModal = openPrivacyModal;
+
   function openPreinstallModal(forceView = null) {
     const modal = document.getElementById('preinstallModal');
     if (!modal) return;
@@ -5220,6 +5264,7 @@ function playTempRecording(item) {
 
   // 초기화 호출
   bindWelcomeEvents();
+  bindPrivacyEvents();
   bindPreinstallEvents();
   checkModelStatus();
 
