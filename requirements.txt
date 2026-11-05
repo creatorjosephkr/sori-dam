@@ -5,3 +5,5 @@ soundfile
 numpy
 voxcpm
 deep-translator
+yt-dlp
+imageio-ffmpeg

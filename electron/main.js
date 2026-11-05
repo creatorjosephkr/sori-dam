@@ -129,10 +129,18 @@ function spawnPython(appDir, dataDir) {
     const pythonBin = getPythonExecutablePath();
     console.log(`[Sori-Dam] 실행할 파이썬 엔진: ${pythonBin}`);
 
+    // PATH에 Homebrew 및 표준 시스템 바이너리 경로 추가
+    const currentPath = process.env.PATH || '';
+    const extraPaths = process.platform === 'win32'
+      ? []
+      : ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
+    const mergedPath = [...extraPaths, currentPath].filter(Boolean).join(path.delimiter);
+
     const proc = spawn(pythonBin, ['app.py'], {
       cwd: appDir,
       env: { 
         ...process.env, 
+        PATH: mergedPath,
         VOXCPM_DATA_DIR: dataDir,
         PYTHONIOENCODING: 'utf-8',
         PYTHONUTF8: '1'

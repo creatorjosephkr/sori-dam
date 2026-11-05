@@ -15,7 +15,8 @@ REQUIRED_PACKAGES = {
     "torch": "torch",
     "voxcpm": "voxcpm",
     "deep_translator": "deep-translator",
-    "yt_dlp": "yt-dlp"
+    "yt_dlp": "yt-dlp",
+    "imageio_ffmpeg": "imageio-ffmpeg"
 }
 
 def get_working_pip_cmd():
@@ -253,6 +254,77 @@ for d in [DATA_DIR, VOICES_DIR, OUTPUTS_DIR, TEMP_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 executor = ThreadPoolExecutor(max_workers=1)
+
+# ── FFmpeg 자동 탐색 및 PATH 등록 ─────────────────────────────────────────────
+def setup_ffmpeg():
+    """
+    FFmpeg 실행 파일을 탐색하고 PATH 환경변수에 등록하여
+    yt-dlp 및 오디오 처리 파이프라인에서 항상 접근할 수 있도록 보장합니다.
+    """
+    project_root = Path(__file__).parent.resolve()
+    candidates = []
+
+    # 1. imageio_ffmpeg 내장 바이너리 탐색
+    try:
+        import imageio_ffmpeg
+        imageio_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if imageio_exe and Path(imageio_exe).exists():
+            imageio_path = Path(imageio_exe)
+            try:
+                os.chmod(imageio_path, 0o755)
+            except Exception:
+                pass
+            std_name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
+            std_binary = imageio_path.parent / std_name
+            if not std_binary.exists():
+                try:
+                    std_binary.symlink_to(imageio_path.name)
+                except Exception:
+                    try:
+                        shutil.copy2(imageio_path, std_binary)
+                        os.chmod(std_binary, 0o755)
+                    except Exception:
+                        pass
+            if std_binary.exists():
+                candidates.append(str(std_binary))
+            candidates.append(str(imageio_path))
+    except Exception as e:
+        print(f"[FFmpeg Setup] imageio_ffmpeg 탐색 예외: {e}")
+
+    # 2. 프로젝트/앱 번들 디렉터리 탐색
+    std_name = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
+    candidates.extend([
+        str(project_root / "bin" / std_name),
+        str(project_root.parent / "bin" / std_name),
+        str(project_root.parent / "resources" / "bin" / std_name),
+    ])
+
+    # 3. 시스템 기본 경로
+    candidates.extend([
+        shutil.which("ffmpeg") or "",
+        "/opt/homebrew/bin/ffmpeg",
+        "/usr/local/bin/ffmpeg",
+        "/usr/bin/ffmpeg",
+    ])
+
+    found_bin = None
+    for c in candidates:
+        if c and Path(c).is_file() and os.access(c, os.X_OK if sys.platform != "win32" else os.F_OK):
+            found_bin = str(Path(c).resolve())
+            break
+
+    if found_bin:
+        bin_dir = str(Path(found_bin).parent.resolve())
+        path_sep = ";" if sys.platform == "win32" else ":"
+        cur_paths = os.environ.get("PATH", "").split(path_sep)
+        if bin_dir not in cur_paths:
+            os.environ["PATH"] = f"{bin_dir}{path_sep}{os.environ.get('PATH', '')}"
+        return found_bin
+
+    return None
+
+# 서버 시작 시 FFmpeg 자동 탐색 및 PATH 등록
+setup_ffmpeg()
 
 # ── DB ───────────────────────────────────────────────────────────────────────
 def get_db():
@@ -1321,19 +1393,10 @@ async def extract_youtube_audio(
         except Exception as e:
             print(f"Error removing temp wav: {e}")
 
-    # 2. ffmpeg 바이너리 탐색
-    project_root = Path(__file__).parent.resolve()
-    ffmpeg_bin = shutil.which("ffmpeg")
-    for opt_path in [
-        project_root / "bin" / "ffmpeg",
-        project_root / "bin" / "ffmpeg.exe",
-        "/opt/homebrew/bin/ffmpeg",
-        "/usr/local/bin/ffmpeg",
-        "/usr/bin/ffmpeg",
-    ]:
-        if Path(opt_path).exists():
-            ffmpeg_bin = str(opt_path)
-            break
+    # 2. ffmpeg 바이너리 탐색 및 PATH 보장
+    ffmpeg_bin = setup_ffmpeg()
+    if not ffmpeg_bin:
+        raise HTTPException(500, "FFmpeg 실행 파일을 찾을 수 없습니다. 오디오 변환을 위해 FFmpeg가 필요합니다.")
 
     # 3. yt-dlp를 이용해 지정 구간 다운로드 및 22050Hz 모노 WAV 변환
     temp_id = str(uuid.uuid4())
@@ -1357,11 +1420,10 @@ async def extract_youtube_audio(
             '-ar', '22050',
             '-ac', '1'
         ],
+        'ffmpeg_location': ffmpeg_bin,
         'quiet': True,
         'no_warnings': True,
     }
-    if ffmpeg_bin:
-        ydl_opts['ffmpeg_location'] = ffmpeg_bin
 
     try:
         loop = asyncio.get_event_loop()
