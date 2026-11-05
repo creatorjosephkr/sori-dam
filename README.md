@@ -1,6 +1,6 @@
 <div align="center">
 <p align="center">
-  <img src="/joseph.jpg" width="60%" alt="크리에이터 요셉" /><br />
+  <img src="/joseph.png" width="60%" alt="크리에이터 요셉" /><br />
   "나에게 필요한 앱을 바이브 코딩으로 직접 만드는 반백살 인디 개발자 아저씨입니다."
 </p>
 
