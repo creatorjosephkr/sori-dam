@@ -51,13 +51,7 @@
         }
       ],
       "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
-        }
+        "dmg"
       ],
       "darkModeSupport": false
     },
@@ -90,6 +84,7 @@
     "dmg": {
       "title": "소리담 ${version}",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "size": "4000M",
       "background": "build/dmg-background.png",
       "window": {
         "width": 540,
