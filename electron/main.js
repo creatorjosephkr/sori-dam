@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, screen, shell } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
@@ -72,14 +72,22 @@ function getPythonExecutablePath() {
       try {
         const pythonDir = path.dirname(embeddedPath);
         
-        // 1. python310._pth 파일에서 import site 활성화
+        // 1. python310._pth 파일에서 import site 활성화 및 Lib/site-packages 경로 보장
         const pthFile = path.join(pythonDir, 'python310._pth');
         if (fs.existsSync(pthFile)) {
           let pthContent = fs.readFileSync(pthFile, 'utf8');
+          let modified = false;
           if (pthContent.includes('#import site')) {
             pthContent = pthContent.replace('#import site', 'import site');
+            modified = true;
+          }
+          if (!pthContent.includes('Lib/site-packages') && !pthContent.includes('Lib\\site-packages')) {
+            pthContent = 'Lib/site-packages\n' + pthContent;
+            modified = true;
+          }
+          if (modified) {
             fs.writeFileSync(pthFile, pthContent, 'utf8');
-            console.log(`[CwdPatch] python310._pth 내 site 활성화 완료`);
+            console.log(`[CwdPatch] python310._pth 내 site 및 Lib/site-packages 활성화 완료`);
           }
         }
         
@@ -136,14 +144,34 @@ function spawnPython(appDir, dataDir) {
       : ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
     const mergedPath = [...extraPaths, currentPath].filter(Boolean).join(path.delimiter);
 
-    const proc = spawn(pythonBin, ['app.py'], {
+    const pythonUserBase = path.join(dataDir, 'python-user');
+    const pythonUserSite = path.join(pythonUserBase, 'Python310', 'site-packages');
+    try {
+      if (!fs.existsSync(pythonUserSite)) {
+        fs.mkdirSync(pythonUserSite, { recursive: true });
+      }
+    } catch (e) {
+      console.warn('[Sori-Dam] python-user 디렉터리 생성 경고:', e.message);
+    }
+
+    const cleanEnv = { ...process.env };
+    delete cleanEnv.PYTHONPATH;
+    delete cleanEnv.PYTHONHOME;
+    delete cleanEnv.PYTHONNOUSERSITE;
+
+    const pythonArgs = ['-u', 'app.py'];
+    const proc = spawn(pythonBin, pythonArgs, {
       cwd: appDir,
       env: { 
-        ...process.env, 
+        ...cleanEnv, 
         PATH: mergedPath,
         VOXCPM_DATA_DIR: dataDir,
+        PYTHONUSERBASE: pythonUserBase,
         PYTHONIOENCODING: 'utf-8',
-        PYTHONUTF8: '1'
+        PYTHONUTF8: '1',
+        PYTHONUNBUFFERED: '1',
+        PIP_NO_WARN_SCRIPT_LOCATION: '1',
+        PIP_DISABLE_PIP_VERSION_CHECK: '1'
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -183,9 +211,20 @@ function spawnPython(appDir, dataDir) {
   });
 }
 
-function waitForServer(timeout = 600000) {
+function waitForServer(timeout = 1800000) {
   return new Promise((resolve, reject) => {
     const start = Date.now();
+    let lastActivity = Date.now();
+
+    const onData = () => {
+      lastActivity = Date.now();
+    };
+
+    if (pythonProcess) {
+      if (pythonProcess.stdout) pythonProcess.stdout.on('data', onData);
+      if (pythonProcess.stderr) pythonProcess.stderr.on('data', onData);
+    }
+
     const interval = setInterval(() => {
       // 파이썬 프로세스가 예기치 않게 종료되었는지 즉각 체크
       if (pythonProcess && (pythonProcess.exitCode !== null || pythonProcess.signalCode !== null)) {
@@ -198,9 +237,17 @@ function waitForServer(timeout = 600000) {
         return;
       }
 
-      if (Date.now() - start > timeout) {
+      const totalElapsed = Date.now() - start;
+      const inactiveElapsed = Date.now() - lastActivity;
+
+      // 전체 30분 초과 또는 활성 출력 없이 10분 이상 완전 멈춤 상태일 때만 타임아웃
+      if (totalElapsed > timeout || inactiveElapsed > 600000) {
         clearInterval(interval);
-        reject(new Error('서버 시작 시간 초과 (10분).\n\n최초 실행 시 필수 AI 모듈 및 파이썬 패키지를 자동으로 준비하고 설치하기 위해 3~5분 가량 시간이 더 소요될 수 있습니다.\n\n인터넷 연결이 정상적인지 확인하신 후, 앱을 다시 켜주세요.'));
+        reject(new Error(
+          '서버 시작 시간 초과 (30분).\n\n' +
+          '최초 실행 시 필수 AI 가속 모듈(PyTorch)을 자동으로 준비하고 다운로드하는 데 네트워크 속도에 따라 시간이 소요될 수 있습니다.\n\n' +
+          '인터넷 연결이 정상적인지 확인하신 후, 앱을 다시 켜주세요.'
+        ));
         return;
       }
       http.get(SERVER_URL, () => {
@@ -260,6 +307,16 @@ function createMainWindow() {
 
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     console.log(`[Renderer] ${message} (${sourceId}:${line})`);
+  });
+
+  // 외부 링크 및 window.open 호출 시 시스템 기본 웹 브라우저로 열기
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url && (url.startsWith('https:') || url.startsWith('http:'))) {
+      shell.openExternal(url).catch(err => {
+        console.error(`[OpenExternal Handler] 실패: ${err.message}`);
+      });
+    }
+    return { action: 'deny' };
   });
 
   mainWindow.once('ready-to-show', () => {
@@ -382,6 +439,15 @@ app.on('activate', () => {
 });
 
 ipcMain.on('app-quit', () => app.quit());
+
+ipcMain.on('open-external', (_, url) => {
+  if (url && typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+    console.log(`[OpenExternal] 기본 브라우저에서 열기: ${url}`);
+    shell.openExternal(url).catch(err => {
+      console.error(`[OpenExternal] 실패: ${err.message}`);
+    });
+  }
+});
 
 ipcMain.on('set-height', (_, contentH) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;

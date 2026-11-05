@@ -1,23 +1,122 @@
 # ── 자동 의존성 설치 모듈 ────────────────────────────────────────────────────────
 import sys
+import os
+import shutil
+import importlib
 import subprocess
 import platform
 from pathlib import Path
 
-print(f"[Sori-Dam] 현재 구동 중인 파이썬 엔진: {sys.executable}")
+# ── Windows 전용 쓰기 가능한 독립 사이트 패키지 경로 확보 및 글로벌 AppData 오염 차단 ──
+_INIT_DATA_DIR = Path(os.environ.get("VOXCPM_DATA_DIR", Path(__file__).parent / "data"))
+_WIN_USER_BASE = _INIT_DATA_DIR / "python-user"
+_WIN_RUNTIME_SITE = _WIN_USER_BASE / "Python310" / "site-packages"
+
+if sys.platform == 'win32':
+    os.environ["PYTHONUSERBASE"] = str(_WIN_USER_BASE)
+    try:
+        _WIN_RUNTIME_SITE.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+
+    appdata = os.environ.get('APPDATA', '')
+    if appdata:
+        roaming_python = os.path.normpath(os.path.join(appdata, 'Python'))
+        roaming_site = Path(roaming_python) / "Python310" / "site-packages"
+        # 기존 실행에서 Roaming\Python에 이미 다운로드된 torch/torchaudio가 있다면 전용 폴더로 즉시 이관 (2.5GB 재다운로드 방지)
+        try:
+            if roaming_site.is_dir() and not (_WIN_RUNTIME_SITE / "torch").exists() and (roaming_site / "torch").exists():
+                for item in roaming_site.iterdir():
+                    if item.name.lower().startswith(("torch", "torchaudio")):
+                        dest = _WIN_RUNTIME_SITE / item.name
+                        if not dest.exists():
+                            shutil.move(str(item), str(dest))
+                print("[Sori-Dam] 기존 다운로드된 PyTorch 모듈을 전용 격리 환경으로 이관 완료했습니다.", flush=True)
+        except Exception as _mig_err:
+            print(f"[Sori-Dam] 기존 PyTorch 이관 참고 메시지: {_mig_err}", flush=True)
+
+        roaming_python_lower = roaming_python.lower()
+        sys.path = [p for p in sys.path if not os.path.normpath(p).lower().startswith(roaming_python_lower)]
+
+    # 번들 site-packages가 최우선, 그 다음 _WIN_RUNTIME_SITE가 위치하도록 보장
+    runtime_site_str = str(_WIN_RUNTIME_SITE)
+    if runtime_site_str not in sys.path:
+        sys.path.append(runtime_site_str)
+
+print(f"[Sori-Dam] 현재 구동 중인 파이썬 엔진: {sys.executable}", flush=True)
+
+def ensure_voxcpm_patched():
+    """voxcpm2.py에서 librosa 의존성을 안전하게 주석 처리하고 utils.py의 디바이스/dtype 선택 로직을 보강"""
+    for p in sys.path:
+        target = Path(p) / "voxcpm" / "model" / "voxcpm2.py"
+        if target.is_file():
+            try:
+                code = target.read_text(encoding="utf-8")
+                modified = False
+                if "\nimport librosa\n" in code:
+                    code = code.replace("\nimport librosa\n", "\n# import librosa\n")
+                    modified = True
+                if "\nimport librosa\r\n" in code:
+                    code = code.replace("\nimport librosa\r\n", "\n# import librosa\r\n")
+                    modified = True
+                if code.startswith("import librosa\n") or code.startswith("import librosa\r\n"):
+                    code = "# " + code
+                    modified = True
+                if modified:
+                    target.write_text(code, encoding="utf-8")
+                    print(f"[Sori-Dam] ✅ {target} 호환성 패치 완료 (librosa 직접 의존성 제거)", flush=True)
+            except Exception as e:
+                print(f"[Sori-Dam] voxcpm 패치 중 경고: {e}", flush=True)
+
+ensure_voxcpm_patched()
 
 REQUIRED_PACKAGES = {
+    "typing_extensions": "typing-extensions",
     "fastapi": "fastapi",
     "uvicorn": "uvicorn[standard]",
     "multipart": "python-multipart",
     "soundfile": "soundfile",
     "numpy": "numpy",
     "torch": "torch",
+    "torchaudio": "torchaudio",
     "voxcpm": "voxcpm",
     "deep_translator": "deep-translator",
     "yt_dlp": "yt-dlp",
     "imageio_ffmpeg": "imageio-ffmpeg"
 }
+
+# Windows 번들 환경에서는 아래 패키지들이 이미 bin/python-win/Lib/site-packages에 포함되어 있습니다.
+# pip으로 재설치하면 패치된 voxcpm이 덮어씌워지므로 반드시 제외해야 합니다.
+_WIN_BUNDLED_PACKAGES = {
+    "typing_extensions",   # bin에 포함
+    "fastapi",             # bin에 포함
+    "uvicorn",             # bin에 포함
+    "multipart",           # bin에 포함
+    "soundfile",           # bin에 포함
+    "numpy",               # bin에 포함
+    "voxcpm",              # bin에 포함 (패치됨 — pip 재설치 금지)
+    "deep_translator",     # bin에 포함
+    "yt_dlp",              # bin에 포함
+    "imageio_ffmpeg",      # bin에 포함
+}
+
+def has_capable_nvidia_gpu() -> bool:
+    """VoxCPM2(4.6GB) 구동이 가능한 NVIDIA GPU(VRAM 5.5GB 이상, Compute Capability 6.0 이상) 유무 확인"""
+    try:
+        res = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.total,compute_cap", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            line = res.stdout.strip().splitlines()[0]
+            parts = [p.strip() for p in line.split(",")]
+            vram_mb = float(parts[0])
+            cc_major = int(parts[1].split(".")[0])
+            print(f"[Sori-Dam] 감지된 NVIDIA GPU 사양: VRAM={vram_mb:.0f}MB, Compute Capability={parts[1]}", flush=True)
+            return vram_mb >= 5500 and cc_major >= 6
+    except Exception:
+        pass
+    return False
 
 def get_working_pip_cmd():
     """실제로 사용 가능한 pip 모듈을 확인하여 리턴합니다."""
@@ -37,81 +136,150 @@ def get_working_pip_cmd():
 
 def install_missing_packages():
     pip_cmd_base = get_working_pip_cmd()
+    base_cmd = [sys.executable, *pip_cmd_base] if len(pip_cmd_base) > 1 else [pip_cmd_base[0]]
     
-    # ── 1. 누락 패키지 점검 및 설치 ──
+    # ── 1. Windows에서 PyTorch 및 TorchAudio 최우선 점검 및 설치 ──
+    # Program Files 설치 시에도 권한 오류가 절대 발생하지 않도록 _WIN_RUNTIME_SITE(--target)에 설치합니다.
+    if sys.platform == 'win32':
+        need_torch = False
+        try:
+            import torch
+            import torchaudio
+        except Exception:
+            need_torch = True
+            # 손상되었거나 불완전한 기존 torch/torchaudio 폴더 정리
+            for prefix in ("torch", "torchaudio"):
+                for item in _WIN_RUNTIME_SITE.glob(f"{prefix}*"):
+                    try:
+                        if item.is_dir():
+                            shutil.rmtree(item, ignore_errors=True)
+                        else:
+                            item.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+
+        if need_torch:
+            use_cuda_wheel = has_capable_nvidia_gpu()
+            installed_ok = False
+
+            if use_cuda_wheel:
+                print("[Sori-Dam] ⚡ Windows CUDA 가속 PyTorch 및 TorchAudio(cu121) 고속 설치를 진행합니다...", flush=True)
+                torch_cuda_cmd = [
+                    *base_cmd, "install",
+                    "--target", str(_WIN_RUNTIME_SITE),
+                    "--upgrade",
+                    "--no-cache-dir",
+                    "--no-deps",
+                    "--no-warn-script-location",
+                    "torch",
+                    "torchaudio",
+                    "--index-url", "https://download.pytorch.org/whl/cu121"
+                ]
+                try:
+                    subprocess.check_call(torch_cuda_cmd)
+                    installed_ok = True
+                    print("[Sori-Dam] ✅ PyTorch 및 TorchAudio CUDA 설치 완료!", flush=True)
+                except Exception as cuda_err:
+                    print(f"[Sori-Dam] ⚠️ CUDA 버전 PyTorch 설치 실패 ({cuda_err}). 호환 CPU 버전으로 자동 전환하여 설치합니다...", flush=True)
+
+            if not installed_ok:
+                print("[Sori-Dam] ⚡ Windows 호환 PyTorch 및 TorchAudio(CPU 최적화 버전) 고속 설치를 진행합니다...", flush=True)
+                torch_cpu_cmd = [
+                    *base_cmd, "install",
+                    "--target", str(_WIN_RUNTIME_SITE),
+                    "--upgrade",
+                    "--no-cache-dir",
+                    "--no-deps",
+                    "--no-warn-script-location",
+                    "torch",
+                    "torchaudio"
+                ]
+                try:
+                    subprocess.check_call(torch_cpu_cmd)
+                    print("[Sori-Dam] ✅ PyTorch 및 TorchAudio 설치 완료!", flush=True)
+                except Exception as e:
+                    print(f"[Sori-Dam] PyTorch/TorchAudio 설치 실패: {e}", file=sys.stderr, flush=True)
+                    sys.exit(1)
+
+            importlib.invalidate_caches()
+            if str(_WIN_RUNTIME_SITE) not in sys.path:
+                sys.path.append(str(_WIN_RUNTIME_SITE))
+
+    # VoxCPM 호환성 패치 재확인
+    ensure_voxcpm_patched()
+
+    # ── 2. 나머지 필수 패키지 점검 및 설치 ──
     missing = []
     for module_name, package_name in REQUIRED_PACKAGES.items():
+        if sys.platform == 'win32' and module_name in _WIN_BUNDLED_PACKAGES:
+            continue
         try:
             __import__(module_name)
         except ImportError:
             missing.append(package_name)
             
     if missing:
-        print(f"[Sori-Dam] 누락된 패키지 감지: {missing}. 자동 설치를 시작합니다...")
-        print(f"[Sori-Dam] 감지된 패키지 매니저 도구: {pip_cmd_base}")
+        print(f"[Sori-Dam] 누락된 패키지 감지: {missing}. 자동 설치를 시작합니다...", flush=True)
+        print(f"[Sori-Dam] 감지된 패키지 매니저 도구: {pip_cmd_base}", flush=True)
         
         for pkg in missing:
             install_pkg = pkg
             extra_args = []
             
             if sys.platform == 'win32':
-                extra_args = ["--no-build-isolation"]
-                # Windows에서 torch 설치 시 CUDA 12.1 가속 인덱스 추가 (NVIDIA GPU 활용)
-                if pkg == "torch":
-                    extra_args.extend(["--index-url", "https://download.pytorch.org/whl/cu121"])
-                    print("[Sori-Dam] ⚡ Windows CUDA 가속 PyTorch(cu121) 인덱스를 적용합니다.")
+                extra_args = ["--target", str(_WIN_RUNTIME_SITE), "--upgrade", "--no-build-isolation"]
+                if pkg == "voxcpm":
+                    extra_args.append("--no-deps")
+                elif pkg in ("torch", "torchaudio"):
+                    extra_args.append("--no-deps")
+                    if has_capable_nvidia_gpu():
+                        extra_args.extend(["--index-url", "https://download.pytorch.org/whl/cu121"])
             
-            print(f"[Sori-Dam] 패키지 설치 진행 중: {install_pkg} (추가옵션: {extra_args})...")
+            print(f"[Sori-Dam] 패키지 설치 진행 중: {install_pkg} (추가옵션: {extra_args})...", flush=True)
             try:
-                base_cmd = [sys.executable, *pip_cmd_base] if len(pip_cmd_base) > 1 else [pip_cmd_base[0]]
                 cmd = [
                     *base_cmd, "install",
                     "--no-cache-dir",
-                    "--use-deprecated=legacy-resolver",
                     "--no-warn-script-location",
                     *extra_args,
                     install_pkg
                 ]
                 
                 subprocess.check_call(cmd)
-                print(f"[Sori-Dam] 패키지 설치 성공: {install_pkg}")
+                importlib.invalidate_caches()
+                print(f"[Sori-Dam] 패키지 설치 성공: {install_pkg}", flush=True)
             except Exception as e:
-                print(f"[Sori-Dam] {install_pkg} 자동 설치 실패: {e}", file=sys.stderr)
-                print(f"[Sori-Dam] 치명적 오류: 필수 패키지 {install_pkg} 설치에 실패하여 기동을 중단합니다.", file=sys.stderr)
+                print(f"[Sori-Dam] {install_pkg} 자동 설치 실패: {e}", file=sys.stderr, flush=True)
+                print(f"[Sori-Dam] 치명적 오류: 필수 패키지 {install_pkg} 설치에 실패하여 기동을 중단합니다.", file=sys.stderr, flush=True)
                 sys.exit(1)
-        print("[Sori-Dam] 모든 필수 패키지 설치 절차가 완료되었습니다!")
 
-    # ── 2. Windows 기존 설치 환경 점검: NVIDIA GPU가 있는데 CPU용 torch가 설치된 경우 자동 교체 ──
+        ensure_voxcpm_patched()
+        print("[Sori-Dam] 모든 필수 패키지 설치 절차가 완료되었습니다!", flush=True)
+
+    # ── 3. Windows 기존 설치 환경 점검: 고성능 NVIDIA GPU(VRAM 6GB+, CC 6.0+)가 있는데 CPU용 torch가 설치된 경우 자동 교체 ──
     if sys.platform == 'win32':
         try:
             import torch
-            if not torch.cuda.is_available():
-                # nvidia-smi 명령어로 실제 NVIDIA 외장 그래픽카드 유무 확인
-                has_nvidia = False
-                try:
-                    res = subprocess.run(["nvidia-smi"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    if res.returncode == 0:
-                        has_nvidia = True
-                except Exception:
-                    pass
-
-                if has_nvidia:
-                    print("[Sori-Dam] 💡 NVIDIA 그래픽카드가 감지되었으나 현재 PyTorch는 CPU 전용 버전입니다.")
-                    print("[Sori-Dam] ⚡ 빠른 음성 생성을 위해 CUDA 가속 PyTorch(cu121)로 자동 교체 설치를 진행합니다...")
-                    base_cmd = [sys.executable, *pip_cmd_base] if len(pip_cmd_base) > 1 else [pip_cmd_base[0]]
-                    cmd = [
-                        *base_cmd, "install",
-                        "--no-cache-dir",
-                        "--upgrade",
-                        "--force-reinstall",
-                        "torch",
-                        "torchaudio",
-                        "--index-url", "https://download.pytorch.org/whl/cu121"
-                    ]
-                    subprocess.check_call(cmd)
-                    print("[Sori-Dam] ✅ CUDA 가속 PyTorch 교체 완료! 다음 기동 또는 생성부터 고속 GPU 추론이 활성화됩니다.")
+            if not torch.cuda.is_available() and has_capable_nvidia_gpu():
+                print("[Sori-Dam] 💡 고성능 NVIDIA 그래픽카드가 감지되었으나 현재 PyTorch는 CPU 전용 버전입니다.", flush=True)
+                print("[Sori-Dam] ⚡ 빠른 음성 생성을 위해 CUDA 가속 PyTorch(cu121)로 자동 교체 설치를 진행합니다...", flush=True)
+                base_cmd = [sys.executable, *pip_cmd_base] if len(pip_cmd_base) > 1 else [pip_cmd_base[0]]
+                cmd = [
+                    *base_cmd, "install",
+                    "--target", str(_WIN_RUNTIME_SITE),
+                    "--no-cache-dir",
+                    "--no-deps",
+                    "--no-warn-script-location",
+                    "--upgrade",
+                    "--force-reinstall",
+                    "torch",
+                    "torchaudio",
+                    "--index-url", "https://download.pytorch.org/whl/cu121"
+                ]
+                subprocess.check_call(cmd)
+                print("[Sori-Dam] ✅ CUDA 가속 PyTorch 교체 완료! 다음 기동 또는 생성부터 고속 GPU 추론이 활성화됩니다.", flush=True)
         except Exception as err:
-            print(f"[Sori-Dam] ⚠️ Windows PyTorch 가속 버전 점검 중 경고: {err}")
+            print(f"[Sori-Dam] ⚠️ Windows PyTorch 가속 버전 점검 중 경고: {err}", flush=True)
 
 install_missing_packages()
 
@@ -134,14 +302,30 @@ import numpy as np
 import torch
 
 # ── 하드웨어 가속 및 스레드 최적화 ─────────────────────────────────────────────
-if torch.cuda.is_available():
-    print(f"[Sori-Dam] 🚀 CUDA GPU 가속 활성화됨: {torch.cuda.get_device_name(0)}")
+def can_use_cuda_for_voxcpm() -> bool:
+    """VoxCPM2(4.6GB) 모델이 GPU 메모리 부족이나 구형 아키텍처 커널 오류 없이 구동 가능한지 점검"""
+    if not torch.cuda.is_available():
+        return False
+    try:
+        props = torch.cuda.get_device_properties(0)
+        vram_mb = props.total_memory / (1024 * 1024)
+        if props.major < 6 or vram_mb < 5500:
+            return False
+        return True
+    except Exception:
+        return False
+
+if can_use_cuda_for_voxcpm():
+    print(f"[Sori-Dam] 🚀 CUDA GPU 가속 활성화됨: {torch.cuda.get_device_name(0)}", flush=True)
 elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-    print("[Sori-Dam] 🚀 Apple Silicon (MPS) 가속 활성화됨")
+    print("[Sori-Dam] 🚀 Apple Silicon (MPS) 가속 활성화됨", flush=True)
 else:
     cpu_threads = max(1, (os.cpu_count() or 4) - 1)
     torch.set_num_threads(cpu_threads)
-    print(f"[Sori-Dam] ℹ️ CPU 모드로 구동됩니다. 멀티스레드 최적화 적용: {cpu_threads} 스레드")
+    if torch.cuda.is_available():
+        print(f"[Sori-Dam] ℹ️ 감지된 GPU({torch.cuda.get_device_name(0)})는 4.6GB 모델 가속 최소 사양(VRAM 6GB+, CC 6.0+) 미만으로, 안정적인 CPU 멀티스레드 모드({cpu_threads} 스레드)로 구동됩니다.", flush=True)
+    else:
+        print(f"[Sori-Dam] ℹ️ CPU 모드로 구동됩니다. 멀티스레드 최적화 적용: {cpu_threads} 스레드", flush=True)
 
 app = FastAPI(title="VoxCPM2 음성 생성기")
 
@@ -575,51 +759,87 @@ def get_model(progress_cb=None):
     global _model, _current_load_progress_cb
     if _model is None:
         _current_load_progress_cb = progress_cb
+        ensure_voxcpm_patched()
         try:
             from voxcpm import VoxCPM
-            _patch_voxcpm_audio_loader()
-            _patch_safetensors_loader()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            err_tb = traceback.format_exc()
+            print(f"[Sori-Dam] voxcpm 임포트 에러 상세:\n{err_tb}", file=sys.stderr)
+            raise RuntimeError(f"voxcpm 라이브러리 임포트 실패 ({e}). 필수 패키지가 정상 설치되었는지 확인해 주세요.")
 
-            if progress_cb:
-                progress_cb(
-                    loaded_mb=0,
-                    total_mb=4580,
-                    pct=3,
-                    stage="init",
-                    msg="AI 음성 생성 모델(약 4.6GB) 로드 준비 중..."
-                )
+        _patch_voxcpm_audio_loader()
+        _patch_safetensors_loader()
 
-            dev_str = "CPU"
-            if torch.cuda.is_available():
-                dev_str = f"CUDA GPU ({torch.cuda.get_device_name(0)})"
-            elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
-                dev_str = "Apple Silicon (MPS)"
-            print(f"[Sori-Dam] VoxCPM2 모델 로드 중... (구동 장치: {dev_str})")
+        if progress_cb:
+            progress_cb(
+                loaded_mb=0,
+                total_mb=4580,
+                pct=3,
+                stage="init",
+                msg="AI 음성 생성 모델(약 4.6GB) 로드 준비 중..."
+            )
 
-            if progress_cb:
-                progress_cb(
-                    loaded_mb=377,
-                    total_mb=4580,
-                    pct=8,
-                    stage="vae",
-                    msg="오디오 VAE 신경망 디코더 로드 중 (약 377MB)..."
-                )
+        dev_str = "CPU"
+        target_device = "cpu"
+        if can_use_cuda_for_voxcpm():
+            dev_str = f"CUDA GPU ({torch.cuda.get_device_name(0)})"
+            target_device = "cuda"
+        elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            dev_str = "Apple Silicon (MPS)"
+            target_device = "mps"
+        print(f"[Sori-Dam] VoxCPM2 모델 로드 중... (구동 장치: {dev_str})", flush=True)
 
-            _model = VoxCPM.from_pretrained("openbmb/VoxCPM2", load_denoiser=False)
+        if progress_cb:
+            progress_cb(
+                loaded_mb=377,
+                total_mb=4580,
+                pct=8,
+                stage="vae",
+                msg="오디오 VAE 신경망 디코더 로드 중 (약 377MB)..."
+            )
 
-            if progress_cb:
-                progress_cb(
-                    loaded_mb=4580,
-                    total_mb=4580,
-                    pct=100,
-                    stage="done",
-                    msg="AI 모델 준비 완료! 음성 합성을 시작합니다."
-                )
-            print("[Sori-Dam] VoxCPM2 모델 로드 완료!")
-        except ImportError:
-            raise RuntimeError("voxcpm 패키지가 설치되지 않았습니다. pip install voxcpm 을 실행하세요.")
-        finally:
-            _current_load_progress_cb = None
+        try:
+            _model = VoxCPM.from_pretrained(
+                "openbmb/VoxCPM2",
+                load_denoiser=False,
+                optimize=False,
+                device=target_device
+            )
+        except Exception as e:
+            if target_device == "cuda":
+                print(f"[Sori-Dam] ⚠️ CUDA 장치 로드 중 예외 발생 ({e}). 안정적인 CPU 모드로 자동 전환하여 재시도합니다...", flush=True)
+                try:
+                    torch.cuda.empty_cache()
+                except Exception:
+                    pass
+                try:
+                    _model = VoxCPM.from_pretrained(
+                        "openbmb/VoxCPM2",
+                        load_denoiser=False,
+                        optimize=False,
+                        device="cpu"
+                    )
+                except Exception as cpu_e:
+                    import traceback
+                    traceback.print_exc()
+                    raise RuntimeError(f"VoxCPM2 모델 가중치 로드 중 오류가 발생했습니다: {cpu_e}")
+            else:
+                import traceback
+                traceback.print_exc()
+                raise RuntimeError(f"VoxCPM2 모델 가중치 로드 중 오류가 발생했습니다: {e}")
+
+        if progress_cb:
+            progress_cb(
+                loaded_mb=4580,
+                total_mb=4580,
+                pct=100,
+                stage="done",
+                msg="AI 모델 준비 완료! 음성 합성을 시작합니다."
+            )
+        print("[Sori-Dam] VoxCPM2 모델 로드 완료!", flush=True)
+        _current_load_progress_cb = None
     return _model
 
 # ── AI 모델 사전 설치 및 범용 하드웨어 상태 진단 모듈 ──────────────────────────────────────────────
@@ -644,7 +864,7 @@ def get_hardware_info():
         cpu_brand = platform.processor() or "CPU"
 
     # 가속 엔진 및 디스플레이 이름 결정
-    if torch.cuda.is_available():
+    if can_use_cuda_for_voxcpm():
         gpu_name = torch.cuda.get_device_name(0)
         device_type = "cuda"
         device_label = f"NVIDIA CUDA ({gpu_name})"
@@ -815,8 +1035,13 @@ async def stream_preinstall():
             device_name = status.get("cpu_brand") or "시스템"
             emit(3, 4, "신경망 로드 및 가속 웜업", 80, 15, f"AI 모델을 메모리에 로드하고 {device_name} 가속 커널을 최적화합니다...", "studying")
             
+            def step3_progress(loaded_mb, total_mb, pct, stage, msg):
+                overall = 80 + int((pct / 100.0) * 15)
+                emit(3, 4, "신경망 로드 및 가속 웜업", overall, pct, msg, "studying",
+                     downloaded_mb=loaded_mb, total_mb=total_mb)
+
             # 모델 로드 & 웜업 실행
-            get_model()
+            get_model(progress_cb=step3_progress)
 
             emit(3, 4, "신경망 로드 및 가속 웜업", 95, 100, "신경망 웜업 및 음성 합성 테스트 완료!", "singing")
             time.sleep(0.6)

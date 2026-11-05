@@ -4807,7 +4807,17 @@ function playTempRecording(item) {
 
         // 다운로드 버튼 연결
         downloadBtn.onclick = () => {
-          window.electronAPI.openExternal(info.htmlUrl);
+          const targetUrl = (info && info.htmlUrl) || 'https://github.com/creatorjosephkr/sori-dam/releases/latest';
+          try {
+            if (window.electronAPI && typeof window.electronAPI.openExternal === 'function') {
+              window.electronAPI.openExternal(targetUrl);
+            } else {
+              window.open(targetUrl, '_blank');
+            }
+          } catch (err) {
+            console.error('[OpenExternal click error]:', err);
+            window.open(targetUrl, '_blank');
+          }
           updateModal.setAttribute('hidden', 'true');
           updateModal.style.display = 'none';
         };

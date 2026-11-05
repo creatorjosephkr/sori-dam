@@ -112,15 +112,16 @@ function patchWindowsPython(winDir) {
     // #import site -> import site로 주석 해제
     if (content.includes('#import site')) {
       content = content.replace('#import site', 'import site');
-      fs.writeFileSync(pthFile, content, 'utf8');
       console.log('      [완료] #import site 주석 해제 완료.');
     } else if (!content.includes('import site')) {
       content += '\nimport site\n';
-      fs.writeFileSync(pthFile, content, 'utf8');
       console.log('      [완료] import site 라인 추가 완료.');
-    } else {
-      console.log('      [알림] 이미 패치되어 있어 건너뜁니다.');
     }
+    if (!content.includes('Lib/site-packages') && !content.includes('Lib\\site-packages')) {
+      content = 'Lib/site-packages\n' + content;
+      console.log('      [완료] Lib/site-packages 경로 추가 완료.');
+    }
+    fs.writeFileSync(pthFile, content, 'utf8');
   }
 
   // ── Windows Embedded Python 용 pip 모듈 수동 셋업 (macOS 크로스 컴파일 호환) ────────────────
@@ -161,6 +162,36 @@ function patchWindowsPython(winDir) {
     console.log('      [완료] 현재 작업 디렉터리(CWD) 임포트 허용 패치 추가 완료.');
   } catch (err) {
     console.error('      ❌ [경고] CwdPatch.pth 생성 실패:', err.message);
+  }
+
+  // ── Windows Embedded Python 용 필수 라이브러리(VoxCPM 및 FastAPI 등) 사전 번들링 ──
+  const voxcpmMarker = path.join(sitePackagesDir, 'voxcpm');
+  if (!fs.existsSync(voxcpmMarker)) {
+    console.log('   📦 Windows 환경용 필수 의존성 라이브러리(VoxCPM/FastAPI 등) 사전 번들링 진행 중...');
+    const hostPython = path.join(BIN_DIR, 'python-mac-arm64', 'bin', 'python3');
+    const pythonCmd = fs.existsSync(hostPython) ? hostPython : 'python3';
+    try {
+      execSync(
+        `"${pythonCmd}" -m pip install --target "${sitePackagesDir}" --platform win_amd64 --python-version 310 --only-binary=:all: ` +
+        `fastapi uvicorn python-multipart soundfile numpy deep-translator yt-dlp transformers sentencepiece safetensors einops pydantic tqdm huggingface-hub wetext inflect librosa sympy==1.14.0 mpmath networkx jinja2 MarkupSafe`,
+        { stdio: 'inherit' }
+      );
+      const macVoxcpm = path.join(BIN_DIR, 'python-mac-arm64', 'lib', 'python3.10', 'site-packages', 'voxcpm');
+      if (fs.existsSync(macVoxcpm)) {
+        console.log('      [이식] 검증된 VoxCPM 패키지 동기화 중...');
+        execSync(`cp -R "${macVoxcpm}" "${sitePackagesDir}/"`);
+        execSync(`find "${path.join(sitePackagesDir, 'voxcpm')}" -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true`);
+      }
+      const voxcpm2File = path.join(sitePackagesDir, 'voxcpm', 'model', 'voxcpm2.py');
+      if (fs.existsSync(voxcpm2File)) {
+        let v2Code = fs.readFileSync(voxcpm2File, 'utf8');
+        v2Code = v2Code.replace(/^import librosa$/m, '# import librosa');
+        fs.writeFileSync(voxcpm2File, v2Code, 'utf8');
+      }
+      console.log('      [성공] Windows 필수 의존성 및 VoxCPM 사전 번들링 완료!');
+    } catch (e) {
+      console.warn('      ⚠️ Windows 사전 번들링 경고 (런타임 설치로 자동 대체됨):', e.message);
+    }
   }
   
   console.log('      [성공] 윈도우용 내장 pip/setuptools/wheel 라이브러리 이식 완료!');

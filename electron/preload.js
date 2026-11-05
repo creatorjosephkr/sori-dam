@@ -1,9 +1,9 @@
-const { contextBridge, ipcRenderer, shell } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   quit:      () => ipcRenderer.send('app-quit'),
   setHeight: (h) => ipcRenderer.send('set-height', h),
-  openExternal: (url) => shell.openExternal(url),
+  openExternal: (url) => ipcRenderer.send('open-external', url),
   onServerLog: (callback) => {
     ipcRenderer.on('server-log', (_, log) => callback(log));
   },
