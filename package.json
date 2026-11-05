@@ -1,0 +1,111 @@
+{
+  "name": "sori-dam",
+  "version": "1.1.5",
+  "description": "로컬 인공지능 음성 생성기",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "setup:bin": "node scripts/setup-binaries.js",
+    "build:mac": "electron-builder --mac",
+    "build:mac-arm64": "electron-builder --mac --arm64",
+    "build:mac-x64": "electron-builder --mac --x64",
+    "build:win": "electron-builder --win",
+    "build": "electron-builder --mac --win"
+  },
+  "build": {
+    "appId": "com.soridam.voicegen",
+    "productName": "Sori-Dam",
+    "copyright": "Apache-2.0",
+    "files": [
+      "electron/**/*",
+      "static/**/*",
+      "app.py",
+      "requirements.txt"
+    ],
+    "extraResources": [
+      {
+        "from": ".",
+        "to": "app",
+        "filter": [
+          "app.py",
+          "requirements.txt",
+          "static/**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "identity": null,
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "extendInfo": {
+        "CFBundleDisplayName": "소리담",
+        "LSHasLocalizedDisplayName": true,
+        "NSMicrophoneUsageDescription": "내 목소리 녹음 및 음성 복제(학습)를 위해 마이크 오디오 입력 권한이 필요합니다."
+      },
+      "extraResources": [
+        {
+          "from": "bin/python-mac-${arch}",
+          "to": "bin/python-mac-${arch}"
+        }
+      ],
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "darkModeSupport": false
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "extraResources": [
+        {
+          "from": "bin/python-win",
+          "to": "bin/python-win"
+        }
+      ],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "installerLanguages": [
+        "ko_KR"
+      ]
+    },
+    "dmg": {
+      "title": "소리담 ${version}",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "background": "build/dmg-background.png",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        { "x": 150, "y": 250, "type": "file" },
+        { "x": 390, "y": 250, "type": "link", "path": "/Applications" }
+      ]
+    },
+    "afterPack": "scripts/after-pack.js",
+    "afterSign": "scripts/notarize.js"
+  },
+  "devDependencies": {
+    "electron": "^42.2.0",
+    "electron-builder": "^26.8.1",
+    "@electron/notarize": "^2.5.0"
+  }
+}

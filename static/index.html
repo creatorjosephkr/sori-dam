@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>소리담(Sori-Dam)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/i18n.js"></script>
+</head>
+<body>
+  <div class="app">
+
+    <!-- ── 전체 너비 헤더 (신호등 + 페이지 타이틀 + 앱 종료) ── -->
+    <header class="app-header">
+      <span class="page-title" data-i18n="header.title">완전 무료 Ai 음성 생성기 - 소리담(Sori-Dam)</span>
+      <div class="header-right">
+        <!-- AI 모델 상태 및 사전 설치 마법사 버튼 -->
+        <button class="btn-header-ctrl" id="btnModelSetup" title="AI 모델 상태 및 사전 설치 마법사" style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px;">
+          <span>⚡</span>
+          <span id="btnModelSetupLabel" style="font-size: 11.5px; font-weight: 700;">AI 모델</span>
+          <span id="btnModelSetupDot" style="width: 7px; height: 7px; border-radius: 50%; background: #ff9500; display: inline-block;"></span>
+        </button>
+        <!-- 다크/라이트 모드 전환 -->
+        <button class="btn-header-ctrl" id="btnTheme" title="다크/라이트 모드 전환" onclick="setTheme(_theme==='dark'?'light':'dark')">
+          <span id="btnThemeIcon">🌙</span>
+        </button>
+        <!-- 언어 전환 -->
+        <button class="btn-header-ctrl" id="btnLang" title="Switch to English" onclick="setLanguage(_lang==='ko'?'en':'ko')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span id="btnLangLabel">KO</span>
+        </button>
+        <button class="btn-quit" id="quitBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <path d="M18.36 6.64A9 9 0 1 1 5.64 6.64"/>
+            <line x1="12" y1="2" x2="12" y2="12"/>
+          </svg>
+          <span data-i18n="header.quit">앱 종료</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ── 사이드바 + 콘텐츠 ── -->
+    <div class="app-body">
+
+    <!-- ── 사이드바 ── -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <span class="sidebar-brand-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true">
+            <path fill="currentColor" d="M26 30h-2v-3h-4a5.005 5.005 0 0 1-5-5v-1.28l-2.316-.771a1 1 0 0 1-.541-1.463L15 13.723V11a9.01 9.01 0 0 1 9-9h5v2h-5a7.008 7.008 0 0 0-7 7v3a1 1 0 0 1-.143.514L14.5 18.446l1.817.605A1 1 0 0 1 17 20v2a3.003 3.003 0 0 0 3 3h5a1 1 0 0 1 1 1Z"/>
+            <path fill="currentColor" d="M19 12h4v2h-4zM9.332 25.217a7 7 0 0 1 0-10.434l1.334 1.49a5 5 0 0 0 0 7.453z"/>
+            <path fill="currentColor" d="M6.4 28.8a11.002 11.002 0 0 1 0-17.6l1.2 1.6a9 9 0 0 0 0 14.401Z"/>
+          </svg>
+        </span>
+        <span class="sidebar-brand-name" data-i18n="sidebar.appName">소리담</span>
+      </div>
+
+      <div class="sidebar-nav">
+        <button class="nav-item active" data-page="home">
+          <span class="nav-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </span>
+          <span class="nav-label" data-i18n="nav.home">소개</span>
+        </button>
+
+        <button class="nav-item" data-page="create">
+          <span class="nav-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+              <line x1="8" y1="22" x2="16" y2="22"/>
+            </svg>
+          </span>
+          <span class="nav-label" data-i18n="nav.create">음성 만들기</span>
+        </button>
+
+        <button class="nav-item" data-page="history">
+          <span class="nav-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+          </span>
+          <span class="nav-label" data-i18n="nav.history">생성 기록</span>
+          <span class="nav-badge" id="navHistoryBadge" hidden>0</span>
+        </button>
+
+        <button class="nav-item" data-page="register-voice">
+          <span class="nav-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+            </svg>
+          </span>
+          <span class="nav-label" data-i18n="nav.register">내 목소리 등록하기</span>
+        </button>
+
+        <button class="nav-item" data-page="voices">
+          <span class="nav-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+          </span>
+          <span class="nav-label" data-i18n="nav.voices">내 음성 관리</span>
+        </button>
+      </div>
+
+      <!-- 사이드바 하단 실시간 로그 모니터 -->
+      <div class="sidebar-log-wrapper" style="padding: 10px 14px; width: 100%;">
+        <div class="log-window" id="logWindow" hidden style="min-height: 80px; max-height: 125px; font-size: 10.5px; padding: 8px 10px; margin-top: 0;">
+          <div class="log-content" id="logContent"></div>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <!-- 개발자 후원 -->
+        <div class="donate-wrap" style="padding: 4px 8px 6px; display:flex; flex-direction:column; gap:4px;">
+          <button id="btnDonateKakao" class="nav-item" style="background: linear-gradient(135deg,#FEE500,#FFCD00); color:#3C1E1E; font-weight:700; font-size:11.5px; justify-content:center; gap:6px; border-radius:8px; padding:7px 10px; border:none; cursor:pointer;" title="카카오페이 QR 후원">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M12 2C6.477 2 2 5.582 2 10c0 2.682 1.527 5.06 3.875 6.582L4.5 21l5.063-2.625C10.316 18.452 11.148 18.5 12 18.5c5.523 0 10-3.582 10-8.5S17.523 2 12 2z"/></svg>
+            <span class="nav-label" data-i18n="donate.kakao">커피 한 잔의 후원 ☕</span>
+          </button>
+          <a href="https://www.paypal.com/paypalme/tech1010?locale.x=ko_KR&country.x=KR" target="_blank" rel="noopener noreferrer" class="nav-item" style="background: linear-gradient(135deg,#003087,#009cde); color:#fff; font-weight:700; font-size:11.5px; justify-content:center; gap:6px; border-radius:8px; padding:7px 10px; text-decoration:none;" title="PayPal 후원">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;"><path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.076-.026.175-.041.254-.93 4.778-4.005 7.201-9.138 7.201h-2.19a.563.563 0 0 0-.556.479l-1.187 7.527h-.506l-.24 1.516a.56.56 0 0 0 .554.647h3.882c.46 0 .85-.334.922-.788.06-.26.76-4.852.816-5.09a.932.932 0 0 1 .923-.788h.58c3.76 0 6.705-1.528 7.565-5.946.36-1.847.174-3.388-.777-4.471z"/></svg>
+            <span class="nav-label" data-i18n="donate.paypal">PayPal 후원 💙</span>
+          </a>
+        </div>
+        <button class="nav-item sidebar-toggle" id="sidebarToggle" aria-label="사이드바 접기/펼치기">
+          <span class="nav-icon sidebar-toggle-icon">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </span>
+          <span class="nav-label" data-i18n="nav.collapse">접기</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ── 콘텐츠 영역 ── -->
+    <div class="content-area">
+      <main class="main">
+
+        <!-- ── 홈 ── -->
+        <div class="page" id="page-home">
+          <div class="home-scroll">
+
+            <div class="home-hero">
+              <div class="home-hero-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 32 32" aria-hidden="true">
+                  <path fill="currentColor" d="M26 30h-2v-3h-4a5.005 5.005 0 0 1-5-5v-1.28l-2.316-.771a1 1 0 0 1-.541-1.463L15 13.723V11a9.01 9.01 0 0 1 9-9h5v2h-5a7.008 7.008 0 0 0-7 7v3a1 1 0 0 1-.143.514L14.5 18.446l1.817.605A1 1 0 0 1 17 20v2a3.003 3.003 0 0 0 3 3h5a1 1 0 0 1 1 1Z"/>
+                  <path fill="currentColor" d="M19 12h4v2h-4zM9.332 25.217a7 7 0 0 1 0-10.434l1.334 1.49a5 5 0 0 0 0 7.453z"/>
+                  <path fill="currentColor" d="M6.4 28.8a11.002 11.002 0 0 1 0-17.6l1.2 1.6a9 9 0 0 0 0 14.401Z"/>
+                </svg>
+              </div>
+              <h1 class="home-hero-title" data-i18n="home.appName">소리담</h1>
+              <p class="home-hero-sub" data-i18n="home.appDesc">VoxCPM2 기반 로컬 인공지능 음성 생성기</p>
+              <button class="btn btn-primary btn-lg" data-nav="create" data-i18n="home.btnStart">음성 만들기 시작</button>
+            </div>
+
+            <div class="home-section">
+              <h2 class="home-section-title" data-i18n="home.howTitle">사용 방법</h2>
+              <div class="home-steps">
+
+                <div class="home-step">
+                  <div class="step-num">01</div>
+                  <div class="step-icon-wrap">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                      <circle cx="9" cy="7" r="4"/>
+                      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                  </div>
+                  <div class="step-title" data-i18n="home.step1.title">내 음성 등록</div>
+                  <div class="step-desc" data-i18n="home.step1.desc">3초 이상의 참조 음성 파일을 업로드하거나 직접 녹음하세요.</div>
+                </div>
+
+                <div class="step-arrow" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                  </svg>
+                </div>
+
+                <div class="home-step">
+                  <div class="step-num">02</div>
+                  <div class="step-icon-wrap">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="16" y1="13" x2="8" y2="13"/>
+                      <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                  </div>
+                  <div class="step-title" data-i18n="home.step2.title">텍스트 입력</div>
+                  <div class="step-desc" data-i18n="home.step2.desc">생성할 텍스트와 원하는 음성 스타일을 입력하세요.</div>
+                </div>
+
+                <div class="step-arrow" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                  </svg>
+                </div>
+
+                <div class="home-step">
+                  <div class="step-num">03</div>
+                  <div class="step-icon-wrap">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                  </div>
+                  <div class="step-title" data-i18n="home.step3.title">음성 생성</div>
+                  <div class="step-desc" data-i18n="home.step3.desc">AI가 선택한 음성 특성으로 텍스트를 자연스럽게 변환합니다.</div>
+                </div>
+
+                <div class="step-arrow" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                  </svg>
+                </div>
+
+                <div class="home-step">
+                  <div class="step-num">04</div>
+                  <div class="step-icon-wrap">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/>
+                    </svg>
+                  </div>
+                  <div class="step-title" data-i18n="home.step4.title">저장 및 활용</div>
+                  <div class="step-desc" data-i18n="home.step4.desc">WAV로 다운로드하거나 내 음성으로 저장해 재활용하세요.</div>
+                </div>
+
+              </div>
+            </div>
+
+            <div class="home-section">
+              <h2 class="home-section-title" data-i18n="home.featTitle">주요 기능</h2>
+              <div class="home-features">
+
+                <div class="home-feature">
+                  <div class="feature-icon-wrap">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                    </svg>
+                  </div>
+                  <div class="feature-title" data-i18n="home.feat1.title">기본 음성 6종</div>
+                  <div class="feature-desc" data-i18n="home.feat1.desc">남녀 각 3가지 기본 AI 음색 제공</div>
+                </div>
+
+                <div class="home-feature">
+                  <div class="feature-icon-wrap">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                      <line x1="12" y1="19" x2="12" y2="22"/>
+                      <line x1="8" y1="22" x2="16" y2="22"/>
+                    </svg>
+                  </div>
+                  <div class="feature-title" data-i18n="home.feat2.title">내 음성 복제</div>
+                  <div class="feature-desc" data-i18n="home.feat2.desc">참조 음성으로 나만의 AI 음성 생성</div>
+                </div>
+
+                <div class="home-feature">
+                  <div class="feature-icon-wrap">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
+                      <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
+                      <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
+                      <line x1="1" y1="14" x2="7" y2="14"/>
+                      <line x1="9" y1="8" x2="15" y2="8"/>
+                      <line x1="17" y1="16" x2="23" y2="16"/>
+                    </svg>
+                  </div>
+                  <div class="feature-title" data-i18n="home.feat3.title">스타일 제어</div>
+                  <div class="feature-desc" data-i18n="home.feat3.desc">자연어로 음성 톤과 감정 스타일 조정</div>
+                </div>
+
+                <div class="home-feature">
+                  <div class="feature-icon-wrap">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                  </div>
+                  <div class="feature-title" data-i18n="home.feat4.title">완전 로컬 처리</div>
+                  <div class="feature-desc" data-i18n="home.feat4.desc">인터넷 없이 내 컴퓨터에서 완전 처리</div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── 음성 만들기 ── -->
+        <div class="page" id="page-create" hidden>
+          <!-- AI 모델 사전 설치 안내 배너 (미설치 시 노출) -->
+          <div id="modelNoticeBanner" class="model-notice-banner" hidden>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:22px; line-height:1;">💡</span>
+              <div>
+                <div style="font-size:13px; font-weight:700; color:var(--text-primary);" data-i18n="banner.modelTitle">
+                  AI 음성 생성 모델(약 4.6GB)이 아직 사전 설치되지 않았습니다.
+                </div>
+                <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;" data-i18n="banner.modelDesc">
+                  첫 음성 생성 시 모델 다운로드로 수 분이 걸릴 수 있습니다. 귀여운 안내와 함께 미리 준비해보세요!
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="btnOpenPreinstallFromBanner" style="font-size:12px; padding:6px 14px; white-space:nowrap; font-weight:700;">
+              ⚡ 사전 설치 마법사 열기
+            </button>
+          </div>
+
+          <div class="page-create-inner">
+
+            <!-- 왼쪽: 텍스트 입력 + 미리듣기 -->
+            <div class="create-left">
+
+              <div class="form-group create-text-group" style="margin-bottom: 4px;">
+                <textarea
+                  id="textInput"
+                  class="textarea create-textarea"
+                  data-i18n-placeholder="create.textPlaceholder"
+                  placeholder="음성을 생성할 글자를 입력하세요."
+                  style="margin-bottom: 8px;"
+                ></textarea>
+                
+                <!-- 텍스트 영역 아래 정밀 통합된 하단 툴바 행 -->
+                <div class="textarea-bottom-bar" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                  <!-- 글자 수 정보 (왼쪽 배치) -->
+                  <div class="char-count" style="position: static; font-size: 12.5px; color: var(--text-secondary); margin: 0; padding: 0; text-align: left;">
+                    <span id="charCount" style="font-weight: 600; color: var(--accent);">0</span><span data-i18n="unit.char">자</span>
+                  </div>
+                  
+                  <!-- 작은 크기의 생성하기 & 새로 시작 버튼 그룹 (오른쪽 배치) -->
+                  <div class="action-buttons-group" style="display: flex; gap: 8px; align-items: center;">
+                    <button type="button" id="restartBtn" class="btn btn-secondary btn-sm" style="padding: 6px 14px; font-size: 12.5px;" hidden data-i18n="create.restartBtn">새로 시작</button>
+                    <button type="button" id="generateBtn" class="btn btn-primary btn-sm" style="padding: 6px 16px; font-size: 12.5px;" data-i18n="create.generateBtn">생성하기</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card player-card player-disabled" id="playerCard" style="margin-top: 8px;">
+                <audio id="mainAudio"></audio>
+                <div class="player-top">
+                  <div class="player-info">
+                    <span class="player-voice-name" id="playerVoiceName">—</span>
+                    <span class="player-duration" id="playerDuration">—</span>
+                  </div>
+                  <div class="player-actions-top">
+                    <a class="btn btn-sm btn-secondary" id="downloadBtn" download="voice.wav">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>
+                      <span data-i18n="history.download">다운로드</span>
+                    </a>
+                    <button class="btn btn-sm btn-secondary" id="trimOutputBtn" style="display:inline-flex; align-items:center; gap:5px;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+                      <span data-i18n="history.edit">편집</span>
+                    </button>
+                    <button class="btn btn-sm btn-primary" id="saveAsVoiceBtn">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                      <span data-i18n="create.saveAsVoice">내 음성으로 저장</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="player-text-preview" id="playerText" data-i18n-attr-data-placeholder="player.placeholder"></div>
+                <div class="player-controls">
+                  <button class="play-btn" id="playBtn" aria-label="재생/일시정지">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                      <path id="playIcon" d="M6 3l14 9-14 9V3z"/>
+                    </svg>
+                  </button>
+                  <div class="player-progress">
+                    <div class="waveform-seek-container">
+                      <canvas class="waveform-visual" id="main-wv-player"></canvas>
+                      <input type="range" id="seekBar" class="seek-bar" min="0" max="100" value="0" step="0.1">
+                    </div>
+                    <div class="player-times">
+                      <span id="currentTime">0:00</span>
+                      <span id="totalTime">0:00</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- 오른쪽: 음성 설정 -->
+            <div class="create-right">
+
+              <div class="segment-wrap">
+                <div class="segment-control" id="tabControl">
+                  <button class="segment-btn active" data-tab="basic" data-i18n="create.tabBasic">기본 음성</button>
+                  <button class="segment-btn" data-tab="my" data-i18n="create.tabMy">내 음성</button>
+                </div>
+              </div>
+
+              <p class="create-guide" data-i18n="create.guide">음성 스타일을 직접 입력하거나 음성을 선택하세요</p>
+
+              <div class="form-group">
+                <label class="form-label" for="styleInput">
+                  <span data-i18n="create.styleLabel">음성 스타일</span>
+                  <span class="form-optional" data-i18n="create.styleOptional">선택사항</span>
+                </label>
+                <input
+                  type="text"
+                  id="styleInput"
+                  class="input"
+                  data-i18n-placeholder="create.stylePlaceholder"
+                  placeholder="예: 활기차고 빠른 목소리, 차분하고 낮은 톤"
+                >
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="voiceSelect" data-i18n="create.voiceSelectLabel">음성 선택</label>
+                <p class="form-hint" id="voiceSelectHint" data-i18n="create.voiceSelectHint">선택한 음성으로 안 만들어지기도 합니다</p>
+                <select id="voiceSelect" class="select">
+                  <option value="" data-i18n="create.voiceNone">선택 안 함</option>
+                </select>
+              </div>
+
+              <details class="advanced">
+                <summary class="advanced-toggle" data-i18n="create.advanced">고급 설정</summary>
+                <div class="advanced-content">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <div class="label-row">
+                        <label class="form-label"><span data-i18n="create.cfg">CFG 강도</span>&ensp;<span class="label-hint" id="cfgVal">2.0</span></label>
+                        <button class="btn-help" type="button" data-help="cfg">?</button>
+                      </div>
+                      <input type="range" id="cfgSlider" class="slider" min="1" max="3" step="0.1" value="2.0">
+                    </div>
+                    <div class="form-group">
+                      <div class="label-row">
+                        <label class="form-label"><span data-i18n="create.steps">생성 단계</span>&ensp;<span class="label-hint" id="stepsVal">10</span></label>
+                        <button class="btn-help" type="button" data-help="steps">?</button>
+                      </div>
+                      <input type="range" id="stepsSlider" class="slider" min="1" max="50" step="1" value="10">
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin-top:4px">
+                    <div class="label-row">
+                      <label class="form-label"><span data-i18n="create.volume">볼륨 최대치</span>&ensp;<span class="label-hint" id="targetDbVal">-6 dB</span></label>
+                      <button class="btn-help" type="button" data-help="targetdb">?</button>
+                    </div>
+                    <input type="range" id="targetDbSlider" class="slider" min="-20" max="0" step="1" value="-6">
+                  </div>
+                  <div class="form-group" style="margin-top:4px">
+                    <div class="label-row">
+                      <label class="form-label"><span data-i18n="create.speed">재생 속도</span>&ensp;<span class="label-hint" id="speedVal">1.0x</span></label>
+                      <button class="btn-help" type="button" data-help="speed">?</button>
+                    </div>
+                    <input type="range" id="speedSlider" class="slider" min="0.5" max="2.0" step="0.1" value="1.0">
+                  </div>
+                  <div style="margin-top: 12px; display: flex; justify-content: flex-end;">
+                    <button type="button" id="resetAdvancedBtn" class="btn btn-secondary btn-sm" style="padding: 4px 10px; font-size: 11.5px;" data-i18n="create.resetBtn">기본값 재설정</button>
+                  </div>
+                </div>
+              </details>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── 생성 기록 ── -->
+        <div class="page" id="page-history" hidden>
+          <div class="page-list-inner">
+            <div class="card-header" style="margin-bottom: 8px;">
+              <h2 class="card-title" data-i18n="history.title">생성 기록</h2>
+              <span class="card-count" id="outputCount">0개</span>
+            </div>
+            <!-- 선택 작업 표시줄 -->
+            <div class="list-action-bar" id="historyActionBar" style="display: none; justify-content: space-between; align-items: center; padding: 10px 16px; background: var(--bg-card); border-radius: 8px; margin-bottom: 12px; border: 1px solid var(--border-light); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+              <label class="checkbox-label" style="display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; color: var(--text-secondary); user-select: none;">
+                <input type="checkbox" id="selectAllCheckbox" style="width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;">
+                <span data-i18n="history.selectAll">모두 선택</span>
+              </label>
+              <button class="btn btn-sm btn-danger" id="deleteSelectedBtn" disabled style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; font-weight: 500;" data-i18n="history.deleteSelected">
+                선택 삭제
+              </button>
+            </div>
+            <div id="outputsList">
+              <div class="empty-state">
+                <p data-i18n="history.empty">생성된 음성이 없습니다</p>
+                <p data-i18n="history.emptyDesc">텍스트를 입력하고 음성을 생성해보세요.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── 내 목소리 등록하기 ── -->
+        <div class="page" id="page-register-voice" hidden>
+          <div class="register-voice-container" style="display: flex; gap: 20px; flex: 1; min-height: 0; overflow: hidden; padding: 20px 24px;">
+            
+            <!-- ① 왼쪽: 작업대 탭 (마이크 녹음 / 유튜브 추출 / 로컬 파일) -->
+            <div class="register-left" style="flex: 1.1; display: flex; flex-direction: column; padding: 0 20px 20px; position: relative; min-height: 0; overflow: hidden;">
+              
+              <!-- 상단 소스 탭 버튼들 -->
+              <div class="segment-wrap" style="margin-bottom: 20px; flex-shrink: 0; z-index: 3;">
+                <div class="segment-control" id="regSourceTabControl">
+                  <button class="segment-btn active" data-reg-tab="mic" style="display: inline-flex; align-items: center; gap: 6px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                    <span data-i18n="reg.tabMic">내 목소리 녹음하기</span>
+                  </button>
+                  <button class="segment-btn" data-reg-tab="youtube" style="display: inline-flex; align-items: center; gap: 6px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg>
+                    <span data-i18n="reg.tabYoutube">유튜브에서 추출하기</span>
+                  </button>
+                  <button class="segment-btn" data-reg-tab="file" style="display: inline-flex; align-items: center; gap: 6px;">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span data-i18n="reg.tabFile">내 파일 등록하기</span>
+                  </button>
+                </div>
+              </div>
+ 
+              <!-- 서브 판넬 영역들 -->
+              <div class="reg-panels-container" style="flex: 1; display: flex; flex-direction: column; position: relative;">
+                
+                <!-- 1. 녹음하기 판넬 -->
+                <div class="reg-panel" id="regPanel-mic" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; overflow: hidden; min-height: 0;">
+                  <!-- 실시간 오실로스코프 시각화 캔버스 (백그라운드) -->
+                  <canvas id="registerWaveCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; opacity: 0.85;"></canvas>
+                  
+                  <div class="register-timer" id="regPageTimer" style="position: relative; z-index: 2; font-size: 54px; font-weight: 700; font-family: monospace; color: var(--text-primary); text-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 10px;">0:00</div>
+                  
+                  <!-- 녹음 제어 큰 버튼 -->
+                  <button class="record-btn-large" id="regPageBtn" type="button" style="position: relative; z-index: 2; width: 90px; height: 90px; border-radius: 50%; border: 4px solid var(--border-light); background: var(--bg-card); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 6px 15px rgba(0,0,0,0.08); outline: none;">
+                    <span class="record-dot-large" style="width: 28px; height: 28px; border-radius: 50%; background: var(--accent); transition: all 0.3s ease;"></span>
+                  </button>
+                  
+                  <div class="register-status" id="regPageStatus" style="position: relative; z-index: 2; font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-top: 16px; text-align: center;" data-i18n="mic.statusIdle">버튼을 눌러 나만의 목소리 녹음을 시작하세요</div>
+                  <div class="register-guide" style="position: relative; z-index: 2; font-size: 12px; color: var(--text-secondary); margin-top: 10px; font-weight: 500; opacity: 0.85; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.85;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span data-i18n="mic.guide">권장 녹음 시간: <span style="color: var(--accent); font-weight: 600;">최소 3초 ~ 최대 30초</span></span>
+                  </div>
+                </div>
+ 
+                <!-- 2. 유튜브 추출 판넬 -->
+                <div class="reg-panel" id="regPanel-youtube" style="flex: 1; display: none; flex-direction: column; gap: 16px;" hidden>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <label style="font-size: 13px; font-weight: 600; color: var(--text-secondary);" data-i18n="yt.urlLabel">유튜브 비디오 링크</label>
+                    <input type="text" class="input" id="ytUrlInput" placeholder="https://www.youtube.com/watch?v=..." style="padding: 10px 12px; font-size: 13.5px;">
+                  </div>
+                  
+                  <!-- 유튜브 임베드 비디오 플레이어 컨테이너 (실시간 렌더링) -->
+                  <div id="ytPlayerContainer" style="display: none; width: 100%; border-radius: 8px; border: 1px solid var(--border-light); background: rgba(0,0,0,0.02); overflow: hidden; margin-top: -4px; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0,0,0,0.02);" hidden>
+                    <div id="ytPlayerPlaceholderWrapper" style="position: relative; padding-bottom: 56.25%; height: 0; width: 100%;">
+                      <div id="ytPlayerPlaceholder" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;"></div>
+                    </div>
+                  </div>
+ 
+                  <!-- 실시간 재생 진행바 및 시각 배지 박스 (신설) -->
+                  <div id="ytProgressContainer" style="display: none; flex-direction: column; gap: 8px; margin-top: 6px;" hidden>
+                    <!-- 진행바 트랙 -->
+                    <div id="ytProgressTrack" style="width: 100%; height: 8px; background: var(--border-light); border-radius: 4px; position: relative; cursor: pointer; transition: all 0.2s ease; overflow: hidden;" onmouseover="this.style.height='10px'" onmouseout="this.style.height='8px'">
+                      <div id="ytProgressFill" style="width: 0%; height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.1s linear;"></div>
+                    </div>
+                    <!-- 재생 시간 텍스트 및 시작/종료 지정 숏컷 버튼 -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                      <span id="ytProgressTimeText" style="font-size: 12px; font-weight: 700; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 4px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        0:00 / 0:00 (현재: 0초)
+                      </span>
+                      <!-- 원클릭 자동 캡처 입력 숏컷 -->
+                      <div style="display: flex; gap: 6px;">
+                        <button type="button" class="btn btn-xs btn-secondary" id="btnSetYtStart" style="padding: 4px 8px; font-size: 10.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 2px;">
+                          <span data-i18n="yt.setStart">[← 시작시간 등록</span>
+                        </button>
+                        <button type="button" class="btn btn-xs btn-secondary" id="btnSetYtEnd" style="padding: 4px 8px; font-size: 10.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 2px;">
+                          <span data-i18n="yt.setEnd">종료시간 등록 →]</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+ 
+                  <!-- 유튜브 영상 제목 및 총 재생시간 표시 박스 (신설) -->
+                  <div id="ytInfoBox" style="display: none; flex-direction: column; gap: 6px; padding: 12px; background: rgba(0,0,0,0.02); border: 1px solid var(--border-light); border-radius: 8px; font-size: 12.5px; margin-top: -4px; transition: all 0.3s ease;" hidden>
+                    <div style="display: flex; align-items: flex-start; gap: 6px; color: var(--text-primary); font-weight: 600; line-height: 1.4;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:2px; color: var(--accent);"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10"/></svg>
+                      <span id="ytVideoTitle" style="word-break: break-all;">유튜브 동영상 제목 로딩 중...</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 11.5px; font-weight: 600;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      <span>총 재생시간: <span id="ytVideoDurationText" style="color: var(--text-primary); font-weight: 700;">0초</span></span>
+                    </div>
+                  </div>
+                  
+                  <div style="display: flex; gap: 16px;">
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                      <label style="font-size: 13px; font-weight: 600; color: var(--text-secondary);" data-i18n="yt.startLabel">시작 지점 (초)</label>
+                      <input type="number" class="input" id="ytStartSec" value="0" min="0" style="padding: 10px 12px; font-size: 13.5px;">
+                    </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
+                      <label style="font-size: 13px; font-weight: 600; color: var(--text-secondary);" data-i18n="yt.endLabel">종료 지점 (초)</label>
+                      <input type="number" class="input" id="ytEndSec" value="15" min="3" style="padding: 3px 12px; font-size: 13.5px;">
+                    </div>
+                  </div>
+ 
+                  <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; padding: 10px 12px; background: rgba(0,0,0,0.02); border-radius: 8px; border: 1px dashed var(--border-light);">
+                    <span style="color: var(--accent); font-weight: 600;">유튜브 구간 추출 조건:</span> 시작과 종료 차이는 <span style="font-weight:600; color: var(--accent);">최소 3초 ~ 최대 30초</span> 내여야 추출이 승인됩니다.
+                  </div>
+                  <button class="btn btn-primary" id="ytExtractBtn" type="button" style="width: 100%; padding: 12px; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg>
+                    <span data-i18n="yt.extractBtn">구간 음성 추출하기</span>
+                  </button>
+ 
+                </div>
+ 
+                <!-- 3. 파일 등록 판넬 -->
+                <div class="reg-panel" id="regPanel-file" style="flex: 1; display: none; flex-direction: column; gap: 16px;" hidden>
+                  <!-- 파일 드롭존 -->
+                  <div id="audioDropzone" style="min-height: 240px; max-height: 240px; border: 2px dashed var(--border-light); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0,0,0,0.01); cursor: pointer; transition: all 0.3s ease; padding: 18px 20px; text-align: center; box-sizing: border-box; overflow: hidden; position: relative;">
+                    <input type="file" id="audioFileInput" accept="audio/*" style="display: none;">
+                    
+                    <div class="dropzone-icon" style="color: var(--text-tertiary); transition: transform 0.2s ease;">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    </div>
+                    
+                    <div style="display:flex; flex-direction:column; gap:6px; align-items:center;">
+                      <p style="font-size: 13px; font-weight: 700; color: var(--text-primary); margin:0;">이곳에 오디오 파일을 드래그 앤 드롭 하세요</p>
+                      <button type="button" id="fileBrowseBtn" style="padding: 6px 16px; font-size: 12px; font-weight: 600; background: var(--accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; display:inline-flex; align-items:center; gap:5px; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        <span data-i18n="file.browseBtn">음성 파일 찾기</span>
+                      </button>
+                    </div>
+                    
+                    <span style="font-size: 11px; color: var(--text-secondary); opacity: 0.85;" data-i18n="file.formats">mp3, wav, flac, ogg, m4a, aac 등 일반적 오디오 포맷 지원</span>
+                  </div>
+ 
+                  <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; padding: 10px 12px; background: rgba(0,0,0,0.02); border-radius: 8px; border: 1px dashed var(--border-light);">
+                    <span style="color: var(--accent); font-weight: 600;">오디오 파일 등록 조건:</span> 오디오 길이 제한은 <span style="font-weight:600; color: var(--accent);">최소 3초 ~ 최대 30초</span> 사이여야 등록이 허가됩니다.
+                  </div>
+ 
+                  <!-- 파일 탐색 완료 후 재생/추가 배지 -->
+                  <div id="fileResultBox" style="display: none; flex-direction: column; gap: 10px; padding: 14px; background: rgba(46, 204, 113, 0.05); border: 1px solid rgba(46, 204, 113, 0.15); border-radius: 10px;" hidden>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                      <div style="display: flex; flex-direction: column; gap: 2px; max-width: 65%;">
+                        <span id="fileNameLabel" style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">filename.mp3</span>
+                        <span style="font-size: 11px; color: var(--text-secondary); font-weight:600;"><span id="fileDurationLabel">0</span>초 감지 완료</span>
+                      </div>
+                      
+                      <!-- 업로드된 오디오 재생 제어 -->
+                      <button class="btn btn-xs btn-secondary" id="filePlayBtn" type="button" style="padding: 4px 8px; font-size: 11.5px; font-weight:600; display:inline-flex; align-items:center; gap:4px; flex-shrink: 0;">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        <span data-i18n="reg.preview">미리듣기</span>
+                      </button>
+                    </div>
+                    <!-- 인라인 파형 플레이어 영역 -->
+                    <div id="tip-file" hidden></div>
+                    <button class="btn btn-accent" id="fileAddTempBtn" type="button" style="width: 100%; padding: 10px; font-weight: 600; font-size: 13px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      <span data-i18n="reg.addToList">임시 리스트에 추가</span>
+                    </button>
+                  </div>
+                </div>
+ 
+              </div>
+            </div>
+ 
+            <!-- ② 오른쪽: 임시 녹음 리스트 (등록 대기) -->
+            <div class="register-right" style="flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; gap: 16px;">
+              <div class="card-header" style="padding-bottom: 12px; border-bottom: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <h3 class="card-title" style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;" data-i18n="reg.listTitle">임시 음성 목록</h3>
+                <span class="card-count" id="tempRecordingsCount" style="font-size: 12px; color: var(--text-secondary); font-weight: 600; background: var(--border-light); padding: 2px 8px; border-radius: 10px;">0개</span>
+              </div>
+
+              <div id="tempRecordingsList" style="flex: 1; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; overflow-y: auto; min-height: 0;">
+                <!-- 탭별 빈 상태 메시지 -->
+                <div id="emptyState-mic" class="tab-empty-state" style="padding: 40px 0; text-align: center; color: var(--text-secondary);">
+                  <p style="font-weight: 500; margin-bottom: 6px;" data-i18n="reg.listEmpty.mic">녹음된 음성이 아직 없습니다</p>
+                  <p style="font-size: 12.5px; opacity: 0.75;" data-i18n="reg.listEmpty.mic.desc">왼쪽 녹음실에서 주의사항 동의 후 목소리를 녹음해보세요!</p>
+                </div>
+                <div id="emptyState-youtube" class="tab-empty-state" style="display:none; padding: 40px 0; text-align: center; color: var(--text-secondary);">
+                  <p style="font-weight: 500; margin-bottom: 6px;" data-i18n="reg.listEmpty.youtube">추출된 음성이 아직 없습니다</p>
+                  <p style="font-size: 12.5px; opacity: 0.75;" data-i18n="reg.listEmpty.youtube.desc">유튜브 영상 주소를 입력하고 구간을 설정한 후 추출해보세요!</p>
+                </div>
+                <div id="emptyState-file" class="tab-empty-state" style="display:none; padding: 40px 0; text-align: center; color: var(--text-secondary);">
+                  <p style="font-weight: 500; margin-bottom: 6px;" data-i18n="reg.listEmpty.file">등록한 음성 파일이 아직 없습니다</p>
+                  <p style="font-size: 12.5px; opacity: 0.75;" data-i18n="reg.listEmpty.file.desc">오디오 파일을 드래그하거나 클릭해서 등록해보세요!</p>
+                </div>
+              </div>
+            </div>
+ 
+          </div>
+        </div>
+
+        <!-- ── 내 음성 관리 ── -->
+        <div class="page" id="page-voices" hidden>
+          <div class="page-list-inner">
+            <div class="card-header" style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+              <h2 class="card-title" style="margin: 0;" data-i18n="voices.title">내 음성 관리</h2>
+              <div class="header-btns">
+                <button class="btn btn-sm btn-secondary" id="addVoiceBtn">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <span data-i18n="voices.addBtn">음성 등록</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 내 음성 관리 상단 분류 탭 (3개) -->
+            <div class="segment-wrap" style="margin-bottom: 20px;">
+              <div class="segment-control" id="voiceTypeTabControl">
+                <button class="segment-btn active" data-voice-type-tab="my_voice" style="display: inline-flex; align-items: center; gap: 6px;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                  <span data-i18n="voice.group.my">내 목소리</span>
+                </button>
+                <button class="segment-btn" data-voice-type-tab="female_actor" style="display: inline-flex; align-items: center; gap: 6px;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M17 11h6"/><path d="M20 8v6"/></svg>
+                  <span data-i18n="voice.group.femaleActor">Ai성우 - 여성</span>
+                </button>
+                <button class="segment-btn" data-voice-type-tab="male_actor" style="display: inline-flex; align-items: center; gap: 6px;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                  <span data-i18n="voice.group.maleActor">Ai성우 - 남성</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 정식 등록 음성 목록 컨테이너 -->
+            <div id="myVoicesList">
+              <div class="empty-state">
+                <p data-i18n="voices.empty">등록된 음성이 없습니다</p>
+                <p data-i18n="voices.emptyDesc">음성 파일을 업로드하거나 마이크로 녹음해보세요.</p>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </main>
+    </div><!-- /content-area -->
+
+    </div><!-- /app-body -->
+
+    <!-- ── 푸터 ── -->
+    <footer class="app-footer" data-i18n="footer.copyright">
+      Copyright &copy; 2026 크리에이터 요셉 (<a href="mailto:creatorjoseph@kakao.com">creatorjoseph@kakao.com</a>)
+    </footer>
+
+  </div><!-- /app -->
+
+
+  <!-- ── 카카오뱅크 후원 QR 모달 ── -->
+  <div class="modal-overlay" id="donateKakaoModal" hidden style="z-index:1200;">
+    <div class="modal-box" style="max-width:360px; text-align:center; padding:32px 28px;">
+      <div style="display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:6px;">
+        <div style="width:36px; height:36px; background:linear-gradient(135deg,#FEE500,#FFCD00); border-radius:50%; display:flex; align-items:center; justify-content:center;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#3C1E1E"><path d="M12 2C6.477 2 2 5.582 2 10c0 2.682 1.527 5.06 3.875 6.582L4.5 21l5.063-2.625C10.316 18.452 11.148 18.5 12 18.5c5.523 0 10-3.582 10-8.5S17.523 2 12 2z"/></svg>
+        </div>
+        <h2 style="font-size:17px; font-weight:700; color:var(--text-primary); margin:0;" data-i18n="donate.title">개발자 후원하기 ☕</h2>
+      </div>
+      <p style="font-size:12.5px; color:var(--text-secondary); margin:0 0 20px; line-height:1.6;" data-i18n="donate.desc">소리담을 응원해주셔서 감사합니다!<br>카카오뱅크 QR코드로 후원하실 수 있어요.</p>
+      <div style="background:var(--bg); border-radius:12px; padding:16px; display:inline-block; border:1px solid var(--border-light);">
+        <img src="assets/pay_qr.png" alt="카카오뱅크 후원 QR" style="width:200px; height:200px; object-fit:contain; border-radius:6px; display:block;">
+      </div>
+      <p style="font-size:11px; color:var(--text-tertiary); margin:14px 0 0; line-height:1.5;" data-i18n="donate.qrDesc">카메라로 QR코드를 스캔하시면<br>카카오뱅크 송금 화면으로 이동합니다.</p>
+      <button id="btnDonateKakaoClose" style="margin-top:20px; padding:9px 28px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;" data-i18n="btn.close">닫기</button>
+    </div>
+  </div>
+
+  <!-- ── 모달 ── -->
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal-box">
+      <h2 class="modal-title" id="modalTitle"></h2>
+      <div id="modalContent"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="modalCancel" data-i18n="btn.cancel">취소</button>
+        <button class="btn btn-primary" id="modalConfirm" data-i18n="btn.confirm">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 트림 편집 모달 ── -->
+  <div class="modal-overlay" id="trimModalOverlay" hidden style="z-index: 1100;">
+    <div class="modal-box" style="width: min(680px, 95vw); max-width: 680px;">
+      <h2 class="modal-title" style="display:flex; align-items:center; gap:8px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+        오디오 트림 편집
+      </h2>
+
+      <!-- 시간 정보 바 -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:12.5px; font-weight:600; color:var(--text-secondary);">
+        <span>전체: <span id="trimTotalDur" style="color:var(--text-primary);">0.0초</span></span>
+        <span style="color:var(--accent);">선택: <span id="trimSelDur">0.0초</span></span>
+        <span>시작: <span id="trimStartLabel">0.0s</span> &nbsp;/&nbsp; 종료: <span id="trimEndLabel">0.0s</span></span>
+      </div>
+
+      <!-- 파형 + 핸들 컨테이너 -->
+      <div id="trimWaveContainer" style="position:relative; width:100%; height:80px; border-radius:10px; overflow:hidden; cursor:crosshair; background:var(--bg-elevated); border:1px solid var(--border-light); user-select:none;">
+        <!-- 파형 canvas -->
+        <canvas id="trimWaveCanvas" style="position:absolute; top:0; left:0; width:100%; height:100%;"></canvas>
+        <!-- 좌측 어두운 마스크 -->
+        <div id="trimMaskLeft" style="position:absolute; top:0; left:0; height:100%; background:rgba(0,0,0,0.45); pointer-events:none;"></div>
+        <!-- 우측 어두운 마스크 -->
+        <div id="trimMaskRight" style="position:absolute; top:0; right:0; height:100%; background:rgba(0,0,0,0.45); pointer-events:none;"></div>
+        <!-- 시작 핸들 -->
+        <div id="trimHandleStart" style="position:absolute; top:0; left:0; width:4px; height:100%; background:var(--accent); cursor:ew-resize; border-radius:2px 0 0 2px;">
+          <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:16px; height:26px; background:var(--accent); border-radius:4px; display:flex; align-items:center; justify-content:center;">
+            <div style="width:2px; height:14px; background:white; border-radius:1px; margin:0 1px;"></div>
+            <div style="width:2px; height:14px; background:white; border-radius:1px; margin:0 1px;"></div>
+          </div>
+        </div>
+        <!-- 종료 핸들 -->
+        <div id="trimHandleEnd" style="position:absolute; top:0; right:0; width:4px; height:100%; background:var(--accent); cursor:ew-resize; border-radius:0 2px 2px 0;">
+          <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:16px; height:26px; background:var(--accent); border-radius:4px; display:flex; align-items:center; justify-content:center;">
+            <div style="width:2px; height:14px; background:white; border-radius:1px; margin:0 1px;"></div>
+            <div style="width:2px; height:14px; background:white; border-radius:1px; margin:0 1px;"></div>
+          </div>
+        </div>
+        <!-- 재생 커서 -->
+        <div id="trimPlayCursor" style="position:absolute; top:0; left:0; width:2px; height:100%; background:rgba(255,59,48,0.9); pointer-events:none; display:none; box-shadow: 0 0 6px rgba(255,59,48,0.6);"></div>
+      </div>
+
+      <!-- 시간 직접 입력 -->
+      <div style="display:flex; gap:12px; margin-top:14px;">
+        <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-secondary);">시작 (초)</label>
+          <input type="number" id="trimStartInput" min="0" step="0.1" style="padding:7px 10px; font-size:13px; border-radius:8px; border:1px solid var(--border-light); background:var(--bg-input); color:var(--text-primary); outline:none; width:100%; box-sizing:border-box;">
+        </div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
+          <label style="font-size:11.5px; font-weight:600; color:var(--text-secondary);">종료 (초)</label>
+          <input type="number" id="trimEndInput" min="0" step="0.1" style="padding:7px 10px; font-size:13px; border-radius:8px; border:1px solid var(--border-light); background:var(--bg-input); color:var(--text-primary); outline:none; width:100%; box-sizing:border-box;">
+        </div>
+      </div>
+
+      <!-- 경고 메시지 -->
+      <div id="trimWarning" style="display:none; margin-top:10px; padding:8px 12px; border-radius:8px; background:rgba(255,69,58,0.08); border:1px solid rgba(255,69,58,0.2); font-size:12.5px; color:#ff453a; font-weight:600;"></div>
+
+      <div class="modal-actions" style="margin-top:16px;">
+        <button class="btn btn-ghost" id="trimCancelBtn">취소</button>
+        <button class="btn btn-secondary" id="trimPreviewBtn" style="display:inline-flex; align-items:center; gap:6px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          구간 미리듣기
+        </button>
+        <button class="btn btn-primary" id="trimApplyBtn" style="display:inline-flex; align-items:center; gap:6px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          편집 적용
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── 토스트 ── -->
+  <div class="toast" id="toast" hidden></div>
+
+  <!-- ── AI 모델 사전 설치 및 하드웨어 환경 최적화 마법사 모달 ── -->
+  <div class="modal-overlay" id="preinstallModal" hidden style="z-index: 9998;">
+    <div class="preinstall-box">
+
+      <!-- ── 화면 1: 시작 안내 및 사전 설치 권장 ── -->
+      <div id="preinstallIntroView">
+        <div class="preinstall-badge">
+          <span>✨</span>
+          <span id="preinstallBadgeText" data-i18n="preinstall.badge">하드웨어 가속 및 AI 모델 사전 최적화</span>
+        </div>
+        <h2 class="preinstall-title" data-i18n="preinstall.introTitle">소리담 첫 시작을 환영합니다! 🎙️</h2>
+        <p class="preinstall-desc" id="preinstallIntroDesc" data-i18n="preinstall.introDesc">
+          첫 음성을 생성할 때 대용량 다운로드로 수 분간 멈추는 지연을 없애기 위해, <strong>고품질 AI 음성 모델(VoxCPM2, 약 4.6GB) 및 가속 환경 사전 설치</strong>를 권장합니다.
+        </p>
+
+        <!-- 3대 혜택 카드 -->
+        <div class="preinstall-benefits">
+          <div class="benefit-card">
+            <span class="benefit-icon">🚀</span>
+            <div class="benefit-title" data-i18n="preinstall.benefit1Title">첫 생성 지연 제로</div>
+            <div class="benefit-desc" data-i18n="preinstall.benefit1Desc">처음 만들 때 기다림 없이 즉시 쾌적하게 음성을 생성합니다.</div>
+          </div>
+          <div class="benefit-card">
+            <span class="benefit-icon">⚡</span>
+            <div class="benefit-title" data-i18n="preinstall.benefit2Title">하드웨어 가속 최적화</div>
+            <div class="benefit-desc" id="benefit2Desc" data-i18n="preinstall.benefit2Desc">내 컴퓨터의 가속 엔진(Apple Silicon MPS / NVIDIA CUDA / CPU)을 사전에 워밍업합니다.</div>
+          </div>
+          <div class="benefit-card">
+            <span class="benefit-icon">🔒</span>
+            <div class="benefit-title" data-i18n="preinstall.benefit3Title">100% 완전 오프라인</div>
+            <div class="benefit-desc" data-i18n="preinstall.benefit3Desc">한 번만 받아두면 인터넷 연결 없이도 언제든 무제한 구동됩니다.</div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button class="btn btn-primary" id="btnStartPreinstall" style="width: 100%; padding: 13px; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+            <span>✨</span>
+            <span data-i18n="preinstall.btnStart">지금 바로 사전 설치 및 가속 최적화 (권장)</span>
+          </button>
+          <button class="btn btn-ghost" id="btnSkipPreinstall" style="width: 100%; padding: 10px; font-size: 13px; font-weight: 600; color: var(--text-secondary);" data-i18n="preinstall.btnSkip">
+            나중에 하기 (첫 음성 생성 시 자동 다운로드)
+          </button>
+        </div>
+      </div>
+
+      <!-- ── 화면 2: 설치 진행 화면 (진행 상태 + 귀여운 캐릭터 소리담이) ── -->
+      <div id="preinstallProgressView" hidden>
+        <!-- 4단계 인디케이터 -->
+        <div class="preinstall-steps">
+          <div class="preinstall-step-item active" id="stepItem1">
+            <div class="step-num">1</div>
+            <div class="step-text" data-i18n="preinstall.step1">가속 점검</div>
+          </div>
+          <div class="preinstall-step-item" id="stepItem2">
+            <div class="step-num">2</div>
+            <div class="step-text" data-i18n="preinstall.step2">모델 다운로드</div>
+          </div>
+          <div class="preinstall-step-item" id="stepItem3">
+            <div class="step-num">3</div>
+            <div class="step-text" data-i18n="preinstall.step3">가속 웜업 & 로드</div>
+          </div>
+          <div class="preinstall-step-item" id="stepItem4">
+            <div class="step-num">4</div>
+            <div class="step-text" data-i18n="preinstall.step4">준비 완료</div>
+          </div>
+        </div>
+
+        <!-- 귀여운 캐릭터 '소리담이' 애니메이션 영역 -->
+        <div class="dami-container">
+          <div class="dami-speech" id="damiSpeech">⚡ 내 컴퓨터의 고성능 가속 엔진을 점검하고 있어요!</div>
+          
+          <svg class="dami-mascot action-searching" id="damiMascot" viewBox="0 0 140 130" xmlns="http://www.w3.org/2000/svg" title="클릭해보세요!">
+            <defs>
+              <linearGradient id="damiBodyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#ffffff"/>
+                <stop offset="100%" stop-color="#e2edfc"/>
+              </linearGradient>
+              <linearGradient id="damiEarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#0071e3"/>
+                <stop offset="100%" stop-color="#00c6ff"/>
+              </linearGradient>
+              <linearGradient id="damiBandGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#3a3a3c"/>
+                <stop offset="50%" stop-color="#545458"/>
+                <stop offset="100%" stop-color="#3a3a3c"/>
+              </linearGradient>
+              <radialGradient id="damiCheekGrad" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#ff6b8b" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="#ff6b8b" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+
+            <!-- 바닥 그림자 -->
+            <ellipse cx="70" cy="118" rx="36" ry="6" fill="rgba(0,0,0,0.08)"/>
+
+            <!-- 안테나 -->
+            <line x1="70" y1="28" x2="70" y2="16" stroke="#0071e3" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="70" cy="14" r="4" fill="#00c6ff"/>
+            <circle cx="70" cy="14" r="2" fill="#ffffff"/>
+
+            <!-- 헤드폰 밴드 -->
+            <path d="M 36,55 C 34,18 106,18 104,55" fill="none" stroke="url(#damiBandGrad)" stroke-width="6" stroke-linecap="round"/>
+
+            <!-- 몸체 (말랑말랑한 조약돌/구름 모양) -->
+            <path id="damiBodyShape" d="M 40,55 C 38,32 102,32 100,55 C 105,76 112,106 70,109 C 28,106 35,76 40,55 Z" fill="url(#damiBodyGrad)" stroke="#cce0f5" stroke-width="2.5"/>
+
+            <!-- 볼터치 -->
+            <ellipse cx="48" cy="74" rx="7" ry="4.5" fill="url(#damiCheekGrad)"/>
+            <ellipse cx="92" cy="74" rx="7" ry="4.5" fill="url(#damiCheekGrad)"/>
+
+            <!-- 눈 (초롱초롱) -->
+            <g id="damiEyes">
+              <ellipse cx="54" cy="65" rx="5" ry="6.5" fill="#1d1d1f"/>
+              <circle cx="52.5" cy="63" r="2.2" fill="#ffffff"/>
+              <circle cx="56" cy="67.5" r="1.1" fill="#ffffff"/>
+
+              <ellipse cx="86" cy="65" rx="5" ry="6.5" fill="#1d1d1f"/>
+              <circle cx="84.5" cy="63" r="2.2" fill="#ffffff"/>
+              <circle cx="88" cy="67.5" r="1.1" fill="#ffffff"/>
+            </g>
+
+            <!-- 입 (기본 미소) -->
+            <path id="damiDefaultMouth" d="M 65,74 Q 70,79 75,74" fill="none" stroke="#1d1d1f" stroke-width="2.2" stroke-linecap="round"/>
+
+            <!-- 헤드폰 양쪽 유닛 -->
+            <rect x="29" y="45" width="11" height="22" rx="5.5" fill="url(#damiEarGrad)"/>
+            <line x1="34.5" y1="51" x2="34.5" y2="61" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+
+            <rect x="100" y="45" width="11" height="22" rx="5.5" fill="url(#damiEarGrad)"/>
+            <line x1="105.5" y1="51" x2="105.5" y2="61" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+
+            <!-- 손 (앞에 모음) -->
+            <ellipse cx="52" cy="95" rx="5.5" ry="5.5" fill="#ffffff" stroke="#cce0f5" stroke-width="1.8"/>
+            <ellipse cx="88" cy="95" rx="5.5" ry="5.5" fill="#ffffff" stroke="#cce0f5" stroke-width="1.8"/>
+
+            <!-- ── 1. 탐색 모드 소품 ── -->
+            <g class="prop-search">
+              <g class="magnifier">
+                <circle cx="50" cy="58" r="12" fill="rgba(0,198,255,0.2)" stroke="#0071e3" stroke-width="2.5"/>
+                <line x1="59" y1="67" x2="72" y2="80" stroke="#ff9500" stroke-width="4" stroke-linecap="round"/>
+                <circle cx="47" cy="55" r="3" fill="#ffffff" opacity="0.6"/>
+              </g>
+            </g>
+
+            <!-- ── 2. 다운로드 모드 소품 (리듬 음표) ── -->
+            <g class="prop-download">
+              <text x="20" y="38" font-size="16" fill="#ff2d55" class="dami-note1" font-weight="bold">♪</text>
+              <text x="110" y="35" font-size="18" fill="#0071e3" class="dami-note2" font-weight="bold">♫</text>
+              <text x="68" y="10" font-size="14" fill="#30d158" class="dami-note3" font-weight="bold">♬</text>
+            </g>
+
+            <!-- ── 3. 학습 모드 소품 (안경 & 책 & 전구) ── -->
+            <g class="prop-study">
+              <!-- 동그란 안경 -->
+              <circle cx="54" cy="65" r="9" fill="none" stroke="#ff9500" stroke-width="2.2"/>
+              <circle cx="86" cy="65" r="9" fill="none" stroke="#ff9500" stroke-width="2.2"/>
+              <line x1="63" y1="65" x2="77" y2="65" stroke="#ff9500" stroke-width="2.2"/>
+              <!-- 전구 -->
+              <g class="dami-lightbulb">
+                <path d="M 66,7 C 66,2 74,2 74,7 C 74,9.5 72,10.5 72,12 L 68,12 C 68,10.5 66,9.5 66,7 Z" fill="#ffd60a"/>
+                <rect x="68" y="13" width="4" height="2" fill="#8e8e93"/>
+                <line x1="62" y1="3" x2="60" y2="0" stroke="#ffd60a" stroke-width="1.5" stroke-linecap="round"/>
+                <line x1="78" y1="3" x2="80" y2="0" stroke="#ffd60a" stroke-width="1.5" stroke-linecap="round"/>
+                <line x1="70" y1="0" x2="70" y2="-2" stroke="#ffd60a" stroke-width="1.5" stroke-linecap="round"/>
+              </g>
+              <!-- AI 사전 책 -->
+              <g class="dami-book">
+                <path d="M 50,88 Q 70,84 70,96 Q 70,84 90,88 L 90,102 Q 70,98 70,110 Q 70,98 50,102 Z" fill="#ffffff" stroke="#0071e3" stroke-width="2"/>
+                <line x1="70" y1="96" x2="70" y2="110" stroke="#0071e3" stroke-width="1.5"/>
+                <text x="54" y="96" font-size="5" fill="#8e8e93" font-weight="bold">AI</text>
+                <text x="74" y="96" font-size="5" fill="#8e8e93" font-weight="bold">VOX</text>
+              </g>
+            </g>
+
+            <!-- ── 4. 노래/웜업 모드 소품 (마이크 & 이퀄라이저) ── -->
+            <g class="prop-sing">
+              <!-- 벌어진 입 -->
+              <ellipse cx="70" cy="76" rx="4.5" ry="6" fill="#ff2d55" class="dami-mouth-sing"/>
+              <ellipse cx="70" cy="78" rx="2.5" ry="3" fill="#ff7a93"/>
+              <!-- 마이크 -->
+              <g class="dami-mic">
+                <rect x="74" y="78" width="6" height="13" rx="3" fill="#8e8e93"/>
+                <circle cx="77" cy="75" r="5" fill="#d2d2d7" stroke="#636366" stroke-width="1.3"/>
+                <line x1="74" y1="75" x2="80" y2="75" stroke="#3a3a3c" stroke-width="1"/>
+                <path d="M 77,91 Q 72,100 64,96" fill="none" stroke="#3a3a3c" stroke-width="1.5"/>
+              </g>
+              <!-- 바닥 이퀄라이저 -->
+              <rect x="48" y="116" width="3.5" height="9" rx="1.7" fill="#0071e3" class="eq-bar-1"/>
+              <rect x="58" y="116" width="3.5" height="13" rx="1.7" fill="#30d158" class="eq-bar-2"/>
+              <rect x="78" y="116" width="3.5" height="15" rx="1.7" fill="#ff9500" class="eq-bar-3"/>
+              <rect x="88" y="116" width="3.5" height="10" rx="1.7" fill="#ff2d55" class="eq-bar-4"/>
+            </g>
+
+            <!-- ── 5. 축하/완성 모드 소품 (만세 & 폭죽 콘페티) ── -->
+            <g class="prop-celebrate">
+              <!-- 만세 손 -->
+              <ellipse cx="30" cy="46" rx="5.5" ry="7.5" fill="#ffffff" stroke="#cce0f5" stroke-width="2" transform="rotate(-35 30 46)"/>
+              <ellipse cx="110" cy="46" rx="5.5" ry="7.5" fill="#ffffff" stroke="#cce0f5" stroke-width="2" transform="rotate(35 110 46)"/>
+              <!-- 콘페티 폭죽 -->
+              <circle cx="22" cy="24" r="3.2" fill="#ff2d55" class="confetti-dot" style="--tx:-26px; --ty:-22px;"/>
+              <circle cx="118" cy="22" r="3.2" fill="#0071e3" class="confetti-dot" style="--tx:26px; --ty:-24px;"/>
+              <circle cx="34" cy="12" r="2.8" fill="#30d158" class="confetti-dot" style="--tx:-18px; --ty:-18px;"/>
+              <circle cx="106" cy="12" r="2.8" fill="#ff9500" class="confetti-dot" style="--tx:18px; --ty:-18px;"/>
+              <!-- 별빛 -->
+              <polygon points="70,1 72,5 77,5 73,8 75,13 70,10 65,13 67,8 63,5 68,5" fill="#ffd60a" class="confetti-dot" style="--tx:0px; --ty:-22px;"/>
+            </g>
+          </svg>
+        </div>
+
+        <!-- 프로그레스 게이지 섹션 -->
+        <div class="preinstall-progress-wrap">
+          <div class="preinstall-progress-header">
+            <div class="preinstall-step-title" id="preinstallStepTitle">하드웨어 가속 환경 점검 중...</div>
+            <div class="preinstall-pct" id="preinstallPct">0%</div>
+          </div>
+          <div class="preinstall-bar">
+            <div class="preinstall-bar-fill" id="preinstallBarFill"></div>
+          </div>
+          <div class="preinstall-stats">
+            <div class="preinstall-submsg" id="preinstallSubmsg">시스템 및 가속 장치를 확인하고 있습니다...</div>
+            <div class="preinstall-badges">
+              <span class="preinstall-tag" id="preinstallSizeTag">4.6 GB</span>
+              <span class="preinstall-tag" id="preinstallSpeedTag"></span>
+              <span class="preinstall-tag" id="preinstallDeviceTag">가속 엔진 점검 중</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 터미널 콘솔 로그 접기/펼치기 토글 -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+          <button class="preinstall-console-toggle" id="btnToggleConsole">
+            <span id="consoleToggleIcon">▶</span>
+            <span data-i18n="preinstall.toggleLog">세부 설치 로그 보기</span>
+          </button>
+          <button class="btn btn-ghost" id="btnCancelPreinstall" style="font-size: 11.5px; padding: 4px 10px; color: var(--text-secondary);">
+            닫기
+          </button>
+        </div>
+
+        <!-- 접이식 터미널 콘솔 -->
+        <div class="preinstall-console-wrap" id="preinstallConsoleWrap" hidden>
+          <div class="preinstall-console" id="preinstallConsole">
+[Sori-Dam] 사전 설치 파이프라인 준비 완료...
+          </div>
+        </div>
+      </div>
+
+      <!-- ── 화면 3: 완료 축하 화면 ── -->
+      <div id="preinstallSuccessView" hidden style="text-align: center; padding: 10px 0;">
+        <div style="font-size: 48px; margin-bottom: 8px;">🎉</div>
+        <h2 class="preinstall-title" data-i18n="preinstall.successTitle">모든 준비가 완벽하게 완료되었습니다!</h2>
+        <p class="preinstall-desc" id="preinstallSuccessDesc" data-i18n="preinstall.successDesc" style="margin-bottom: 24px;">
+          내 컴퓨터의 하드웨어 가속 엔진과 고품질 음성 가중치가 메모리에 준비되었습니다.<br>
+          이제 기다림 없이 바로 첫 목소리를 빚어보세요!
+        </p>
+        <button class="btn btn-primary" id="btnFinishPreinstall" style="width: 100%; padding: 13px; font-weight: 700; font-size: 14.5px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+          <span>🎙️</span>
+          <span data-i18n="preinstall.btnStartVoice">소리담 시작하기</span>
+        </button>
+      </div>
+
+      <!-- ── 화면 4: 이미 설치 완료되어 있는 상태에서 열었을 때 ── -->
+      <div id="preinstallAlreadyInstalledView" hidden style="text-align: center; padding: 10px 0;">
+        <div style="font-size: 40px; margin-bottom: 8px;">✅</div>
+        <h2 class="preinstall-title" data-i18n="preinstall.alreadyTitle">AI 음성 모델이 준비되어 있습니다</h2>
+        <p class="preinstall-desc" id="alreadyInstalledDesc" style="margin-bottom: 20px;">
+          로컬 캐시에 모델 가중치(4.6GB)가 안전하게 보관되어 있습니다.
+        </p>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+          <button class="btn btn-primary" id="btnRewarmup" style="flex: 1; padding: 11px; font-weight: 700; font-size: 13px;">
+            ⚡ 가속 엔진 재점검 및 웜업
+          </button>
+          <button class="btn btn-ghost" id="btnCloseAlready" style="padding: 11px 20px; font-size: 13px;">
+            닫기
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── 업데이트 알림 모달 ── -->
+  <div class="modal-overlay" id="updateModal" hidden style="z-index: 9999;">
+    <div class="modal" style="max-width: 440px; padding: 24px; text-align: center; border-radius: 16px; background: var(--bg-card); box-shadow: 0 10px 30px rgba(0,0,0,0.15); border: 1px solid var(--border-light);">
+      <h2 class="modal-title" data-i18n="update.title" style="font-size: 20px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary);">새로운 업데이트 소식 🚀</h2>
+      <p class="modal-desc" data-i18n="update.body" style="font-size: 13.5px; color: var(--text-secondary); line-height: 1.55; margin-bottom: 20px;">새로운 버전이 준비되었습니다. 지금 다운로드하여 최신 인공지능 기능과 개선사항을 경험해보세요!</p>
+      
+      <!-- 버전 비교 표시 박스 -->
+      <div style="display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px 16px; background: rgba(0,113,227,0.04); border: 1px solid rgba(0,113,227,0.15); border-radius: 10px; margin-bottom: 24px;">
+        <div style="text-align: center; flex: 1;">
+          <span style="display: block; font-size: 10.5px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px;" data-i18n="update.current">현재 버전</span>
+          <span id="updateCurrentVer" style="font-size: 14.5px; font-weight: 700; color: var(--text-secondary);">1.0.0</span>
+        </div>
+        <div style="font-size: 18px; color: var(--accent); font-weight: 700;">➔</div>
+        <div style="text-align: center; flex: 1;">
+          <span style="display: block; font-size: 10.5px; font-weight: 600; color: var(--accent); text-transform: uppercase; margin-bottom: 4px;" data-i18n="update.latest">최신 버전</span>
+          <span id="updateLatestVer" style="font-size: 15.5px; font-weight: 800; color: var(--accent);">1.1.0</span>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn btn-primary" id="updateDownloadBtn" style="width: 100%; padding: 12px; font-weight: 700; font-size: 13.5px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          <span data-i18n="update.btnDownload">다운로드 페이지로 이동</span>
+        </button>
+        <button class="btn btn-ghost" id="updateLaterBtn" style="width: 100%; padding: 10px; font-size: 13px; font-weight: 600; color: var(--text-secondary);" data-i18n="update.btnLater">나중에 하기</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
