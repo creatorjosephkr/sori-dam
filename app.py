@@ -474,9 +474,14 @@ DATA_DIR = Path(os.environ.get('VOXCPM_DATA_DIR', 'data'))
 VOICES_DIR = DATA_DIR / "voices"
 OUTPUTS_DIR = DATA_DIR / "outputs"
 TEMP_DIR = DATA_DIR / "temp"
+SHARED_CACHE_DIR = DATA_DIR / "shared_cache"
 DB_PATH = DATA_DIR / "voxcpm.db"
+GITHUB_CONFIG_PATH = DATA_DIR / "github_config.json"
+SHARED_VOICES_REPO = os.environ.get("SORIDAM_GITHUB_REPO", "creatorjosephkr/sori-dam")
+SHARED_VOICES_BRANCH = os.environ.get("SORIDAM_GITHUB_BRANCH", "main")
+LOCAL_SHARED_DIR = Path(__file__).parent.resolve() / "shared_voices"
 
-for d in [DATA_DIR, VOICES_DIR, OUTPUTS_DIR, TEMP_DIR]:
+for d in [DATA_DIR, VOICES_DIR, OUTPUTS_DIR, TEMP_DIR, SHARED_CACHE_DIR]:
     d.mkdir(parents=True, exist_ok=True)
 
 executor = ThreadPoolExecutor(max_workers=1)
@@ -638,6 +643,13 @@ def migrate_db():
             conn.commit()
         except Exception:
             pass
+
+    # voices 테이블에 공유저장소 고유 ID(shared_id) 컬럼 추가
+    try:
+        conn.execute("ALTER TABLE voices ADD COLUMN shared_id TEXT DEFAULT ''")
+        conn.commit()
+    except Exception:
+        pass
 
     conn.close()
 
@@ -1586,7 +1598,7 @@ async def generate_speech(
 
 
 @app.get("/api/audio/{category}/{filename}")
-def serve_audio(category: str, filename: str):
+def serve_audio(category: str, filename: str, download_name: str = None):
     if category == "outputs":
         path = OUTPUTS_DIR / filename
     elif category == "voices":
@@ -1597,6 +1609,11 @@ def serve_audio(category: str, filename: str):
         raise HTTPException(404)
     if not path.exists():
         raise HTTPException(404)
+    if download_name:
+        safe_dl = re.sub(r'[\\/:*?"<>|]+', "_", download_name.strip()) or "voice"
+        if not safe_dl.lower().endswith(".wav"):
+            safe_dl += ".wav"
+        return FileResponse(str(path), media_type="audio/wav", filename=safe_dl)
     return FileResponse(str(path), media_type="audio/wav")
 
 
@@ -1976,7 +1993,663 @@ async def extract_youtube_audio(
     }
 
 
+# ── GitHub 공유 저장소(Export / Import) API ────────────────────────────────────
+import base64
+import urllib.request
+import urllib.error
+
+_shared_index_cache = {"items": None, "ts": 0.0}
+
+
+def _load_github_config() -> dict:
+    if GITHUB_CONFIG_PATH.exists():
+        try:
+            return json.loads(GITHUB_CONFIG_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_github_config(cfg: dict):
+    try:
+        current = _load_github_config()
+        current.update(cfg)
+        GITHUB_CONFIG_PATH.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"[GitHub Config] 설정 저장 실패: {e}")
+
+
+def _resolve_github_token(explicit_token: str = None) -> tuple[str, str]:
+    """(token, method) 튜플 반환"""
+    if explicit_token and explicit_token.strip():
+        tok = explicit_token.strip()
+        _save_github_config({"github_token": tok})
+        return tok, "token"
+
+    cfg = _load_github_config()
+    if cfg.get("github_token", "").strip():
+        return cfg["github_token"].strip(), "token"
+
+    for env_key in ("GITHUB_TOKEN", "GH_TOKEN", "SORIDAM_GITHUB_TOKEN"):
+        if os.environ.get(env_key, "").strip():
+            return os.environ[env_key].strip(), "env"
+
+    gh_candidates = [
+        shutil.which("gh") or "",
+        "/opt/homebrew/bin/gh",
+        "/usr/local/bin/gh",
+        r"C:\Program Files\GitHub CLI\gh.exe",
+    ]
+    for gh_bin in gh_candidates:
+        if gh_bin and os.path.isfile(gh_bin):
+            try:
+                out = subprocess.check_output(
+                    [gh_bin, "auth", "token"],
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    timeout=3,
+                ).strip()
+                if out:
+                    return out, "gh_cli"
+            except Exception:
+                pass
+
+    return "", "none"
+
+
+def _can_use_local_git() -> bool:
+    repo_root = Path(__file__).parent.resolve()
+    return (repo_root / ".git").exists() and bool(shutil.which("git"))
+
+
+def _github_api_request(method: str, path: str, token: str = "", data: dict = None, timeout: int = 20) -> dict:
+    url = f"https://api.github.com/repos/{SHARED_VOICES_REPO}/{path.lstrip('/')}"
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Sori-Dam-App/1.2.0",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    body_bytes = None
+    if data is not None:
+        headers["Content-Type"] = "application/json; charset=utf-8"
+        body_bytes = json.dumps(data).encode("utf-8")
+
+    req = urllib.request.Request(url, data=body_bytes, headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        raw = resp.read().decode("utf-8")
+        return json.loads(raw) if raw else {}
+
+
+def _fetch_shared_voices_index(force_refresh: bool = False) -> list[dict]:
+    now = time.time()
+    if not force_refresh and _shared_index_cache["items"] is not None and (now - _shared_index_cache["ts"] < 15):
+        return _shared_index_cache["items"]
+
+    local_idx_path = LOCAL_SHARED_DIR / "index.json"
+    cache_idx_path = SHARED_CACHE_DIR / "index.json"
+
+    # 1. GitHub 저장소에서 실시간 조회 (GitHub 원격 저장소를 단일 진실 공급원으로 사용)
+    remote_items = None
+    tok, _ = _resolve_github_token()
+    try:
+        res = _github_api_request(
+            "GET",
+            f"contents/shared_voices/index.json?ref={SHARED_VOICES_BRANCH}",
+            token=tok,
+            timeout=8,
+        )
+        if isinstance(res, dict) and res.get("content"):
+            decoded = base64.b64decode(res["content"]).decode("utf-8")
+            remote_items = json.loads(decoded)
+    except urllib.error.HTTPError as he:
+        if he.code == 404:
+            remote_items = []
+    except Exception:
+        pass
+
+    if remote_items is None:
+        try:
+            raw_url = f"https://raw.githubusercontent.com/{SHARED_VOICES_REPO}/{SHARED_VOICES_BRANCH}/shared_voices/index.json?t={int(now)}"
+            req = urllib.request.Request(raw_url, headers={"User-Agent": "Sori-Dam-App/1.2.0", "Cache-Control": "no-cache"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                remote_items = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as he:
+            if he.code == 404:
+                remote_items = []
+        except Exception as e:
+            print(f"[SharedVoices] 원격 index 조회 참고(오프라인): {e}")
+
+    items_by_id = {}
+    if isinstance(remote_items, list):
+        # 온라인 조회 성공 시: 원격 GitHub 저장소 목록만 신뢰하고 로컬 캐시/번들 index.json을 원격 기준으로 덮어씀
+        for item in remote_items:
+            if isinstance(item, dict) and item.get("id"):
+                items_by_id[item["id"]] = item
+        clean_list = sorted(items_by_id.values(), key=lambda x: float(x.get("created_at") or 0), reverse=True)
+        serialized = json.dumps(clean_list, ensure_ascii=False, indent=2)
+        try:
+            cache_idx_path.write_text(serialized, encoding="utf-8")
+        except Exception:
+            pass
+        try:
+            if local_idx_path.parent.exists():
+                local_idx_path.write_text(serialized, encoding="utf-8")
+        except Exception:
+            pass
+        _shared_index_cache["items"] = clean_list
+        _shared_index_cache["ts"] = now
+        return clean_list
+
+    # 2. 완전 오프라인 시 폴백: 로컬 캐시 -> 로컬 번들 순으로 참조
+    for fallback_path in (cache_idx_path, local_idx_path):
+        if fallback_path.exists():
+            try:
+                for item in json.loads(fallback_path.read_text(encoding="utf-8")):
+                    if isinstance(item, dict) and item.get("id"):
+                        items_by_id[item["id"]] = item
+                if items_by_id:
+                    break
+            except Exception as e:
+                print(f"[SharedVoices] 오프라인 index 로드 오류 ({fallback_path.name}): {e}")
+
+    items = sorted(items_by_id.values(), key=lambda x: float(x.get("created_at") or 0), reverse=True)
+    _shared_index_cache["items"] = items
+    _shared_index_cache["ts"] = now
+    return items
+
+
+def _ensure_shared_audio_cached(shared_id: str, audio_file: str = None) -> Path:
+    if not audio_file:
+        idx = _fetch_shared_voices_index(force_refresh=False)
+        found = next((x for x in idx if x.get("id") == shared_id), None)
+        audio_file = found.get("audio_file") if found else f"{shared_id}.wav"
+
+    safe_name = Path(audio_file).name
+    cached_path = SHARED_CACHE_DIR / safe_name
+    if cached_path.exists() and cached_path.stat().st_size > 100:
+        return cached_path
+
+    local_bundled = LOCAL_SHARED_DIR / safe_name
+    if local_bundled.exists() and local_bundled.stat().st_size > 100:
+        shutil.copy2(str(local_bundled), str(cached_path))
+        return cached_path
+
+    # GitHub Raw URL 또는 Contents API에서 다운로드
+    raw_url = f"https://raw.githubusercontent.com/{SHARED_VOICES_REPO}/{SHARED_VOICES_BRANCH}/shared_voices/{safe_name}"
+    try:
+        req = urllib.request.Request(raw_url, headers={"User-Agent": "Sori-Dam-App/1.2.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = resp.read()
+            if len(data) > 100:
+                cached_path.write_bytes(data)
+                return cached_path
+    except Exception:
+        pass
+
+    tok, _ = _resolve_github_token()
+    try:
+        res = _github_api_request(
+            "GET",
+            f"contents/shared_voices/{safe_name}?ref={SHARED_VOICES_BRANCH}",
+            token=tok,
+            timeout=20,
+        )
+        if isinstance(res, dict) and res.get("content"):
+            data = base64.b64decode(res["content"])
+            cached_path.write_bytes(data)
+            return cached_path
+    except Exception as e:
+        raise HTTPException(404, f"공유 저장소에서 오디오 파일을 다운로드할 수 없습니다: {e}")
+
+    raise HTTPException(404, "공유 저장소 오디오 파일을 찾을 수 없습니다.")
+
+
+@app.get("/api/shared-voices/auth-status")
+def get_shared_voices_auth_status():
+    tok, method = _resolve_github_token()
+    if not tok and _can_use_local_git():
+        method = "git_local"
+    cfg = _load_github_config()
+    return {
+        "configured": bool(tok) or method == "git_local",
+        "method": method,
+        "repo": SHARED_VOICES_REPO,
+        "author": cfg.get("author", "creatorjosephkr"),
+        "has_saved_token": bool(cfg.get("github_token")),
+    }
+
+
+@app.post("/api/shared-voices/token")
+def save_shared_voices_token(
+    github_token: str = Form(""),
+    author: str = Form(""),
+):
+    tok = github_token.strip()
+    updates = {}
+    if author.strip():
+        updates["author"] = author.strip()
+    if tok:
+        # 토큰 유효성 간단 확인
+        try:
+            req = urllib.request.Request(
+                "https://api.github.com/user",
+                headers={
+                    "Accept": "application/vnd.github.v3+json",
+                    "Authorization": f"Bearer {tok}",
+                    "User-Agent": "Sori-Dam-App/1.2.0",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                user_info = json.loads(resp.read().decode("utf-8"))
+                login = user_info.get("login")
+                if login and not author.strip():
+                    updates["author"] = login
+        except Exception as e:
+            raise HTTPException(400, f"유효하지 않은 GitHub 토큰입니다: {e}")
+        updates["github_token"] = tok
+
+    _save_github_config(updates)
+    return get_shared_voices_auth_status()
+
+
+@app.get("/api/shared-voices")
+def list_shared_voices(refresh: bool = False):
+    items = _fetch_shared_voices_index(force_refresh=refresh)
+
+    conn = get_db()
+    local_rows = conn.execute("SELECT id, name, shared_id, audio_path FROM voices").fetchall()
+    conn.close()
+
+    by_shared_id = {}
+    by_name = {}
+    for r in local_rows:
+        rd = dict(r)
+        ap = rd.get("audio_path")
+        if ap and Path(ap).exists():
+            if rd.get("shared_id"):
+                by_shared_id[rd["shared_id"]] = rd["id"]
+            by_name[rd["name"]] = rd["id"]
+
+    result = []
+    for item in items:
+        sid = item.get("id", "")
+        local_id = by_shared_id.get(sid) or by_name.get(item.get("name", ""))
+        entry = dict(item)
+        entry["imported"] = bool(local_id)
+        entry["local_voice_id"] = local_id
+        entry["audio_url"] = f"/api/shared-voices/{sid}/audio"
+        result.append(entry)
+
+    return result
+
+
+@app.get("/api/shared-voices/{shared_id}/audio")
+def get_shared_voice_audio(shared_id: str, download_name: str = None):
+    cached_path = _ensure_shared_audio_cached(shared_id)
+    if download_name:
+        safe_dl = re.sub(r'[\\/:*?"<>|]+', "_", download_name.strip()) or shared_id
+        if not safe_dl.lower().endswith(".wav"):
+            safe_dl += ".wav"
+        return FileResponse(str(cached_path), media_type="audio/wav", filename=safe_dl)
+    return FileResponse(str(cached_path), media_type="audio/wav", filename=f"{shared_id}.wav")
+
+
+@app.post("/api/shared-voices/import")
+def import_shared_voice(
+    shared_id: str = Form(...),
+    voice_type: str = Form(None),
+    custom_name: str = Form(None),
+):
+    import soundfile as sf
+
+    shared_id = shared_id.strip()
+    items = _fetch_shared_voices_index(force_refresh=False)
+    meta = next((x for x in items if x.get("id") == shared_id), None)
+    if not meta:
+        items = _fetch_shared_voices_index(force_refresh=True)
+        meta = next((x for x in items if x.get("id") == shared_id), None)
+    if not meta:
+        raise HTTPException(404, "공유 저장소에서 선택한 음성을 찾을 수 없습니다.")
+
+    # 이미 가져온 음성인지 확인
+    conn = get_db()
+    existing = conn.execute("SELECT * FROM voices WHERE shared_id = ?", (shared_id,)).fetchone()
+    if existing:
+        ed = dict(existing)
+        if ed.get("audio_path") and Path(ed["audio_path"]).exists():
+            conn.close()
+            ed["audio_url"] = f"/api/audio/voices/{Path(ed['audio_path']).name}"
+            ed["original_audio_url"] = ed["audio_url"]
+            ed["already_imported"] = True
+            return ed
+        else:
+            conn.execute("DELETE FROM voices WHERE id = ?", (ed["id"],))
+            conn.commit()
+    conn.close()
+
+    cached_wav = _ensure_shared_audio_cached(shared_id, meta.get("audio_file"))
+
+    voice_id = str(uuid.uuid4())
+    voice_path = VOICES_DIR / f"{voice_id}.wav"
+    shutil.copy2(str(cached_wav), str(voice_path))
+
+    # 참조 음성 최소 길이(3.0초) 보장 보정
+    try:
+        data, sr = sf.read(str(voice_path))
+        dur = len(data) / float(sr)
+        if dur < 3.0 and len(data) > 0:
+            gap = np.zeros((int(0.15 * sr),) + data.shape[1:], dtype=data.dtype)
+            chunks = [data]
+            total_len = len(data)
+            target_len = int(3.2 * sr)
+            while total_len < target_len:
+                chunks.append(gap)
+                chunks.append(data)
+                total_len += len(gap) + len(data)
+            padded = np.concatenate(chunks, axis=0)
+            sf.write(str(voice_path), padded, sr)
+    except Exception as e:
+        print(f"[SharedVoices] 오디오 패딩 확인 중 예외: {e}")
+
+    name = (custom_name or meta.get("name") or "공유 음성").strip()
+    gender = meta.get("gender") if meta.get("gender") in ("여성", "남성") else "여성"
+    vtype = voice_type or meta.get("voice_type") or ("female_actor" if gender == "여성" else "male_actor")
+    if vtype not in ("my_voice", "female_actor", "male_actor"):
+        vtype = "female_actor" if gender == "여성" else "male_actor"
+
+    style = meta.get("style") or ""
+    cfg_value = float(meta.get("cfg_value") if meta.get("cfg_value") is not None else 2.0)
+    steps = int(meta.get("steps") if meta.get("steps") is not None else 10)
+    target_db = float(meta.get("target_db") if meta.get("target_db") is not None else -6.0)
+    speed = float(meta.get("speed") if meta.get("speed") is not None else 1.0)
+    now = time.time()
+
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO voices (id, name, gender, audio_path, created_at, preview_text, preview_audio_path, style, cfg_value, steps, target_db, speed, voice_type, shared_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (voice_id, name, gender, str(voice_path), now, "", "", style, cfg_value, steps, target_db, speed, vtype, shared_id),
+    )
+    conn.commit()
+    conn.close()
+
+    return {
+        "id": voice_id,
+        "name": name,
+        "gender": gender,
+        "audio_url": f"/api/audio/voices/{voice_id}.wav",
+        "original_audio_url": f"/api/audio/voices/{voice_id}.wav",
+        "created_at": now,
+        "style": style,
+        "cfg_value": cfg_value,
+        "steps": steps,
+        "target_db": target_db,
+        "speed": speed,
+        "voice_type": vtype,
+        "shared_id": shared_id,
+        "already_imported": False,
+    }
+
+
+@app.post("/api/shared-voices/export")
+def export_shared_voice(
+    name: str = Form(...),
+    gender: str = Form(...),
+    from_output_id: str = Form(None),
+    from_voice_id: str = Form(None),
+    voice_type: str = Form("female_actor"),
+    style: str = Form(""),
+    sample_text: str = Form(""),
+    author: str = Form(""),
+    github_token: str = Form(None),
+):
+    import soundfile as sf
+
+    name = name.strip()
+    if not name:
+        raise HTTPException(400, "공유할 음성 이름을 입력하세요.")
+    if gender not in ("여성", "남성"):
+        raise HTTPException(400, "성별을 선택하세요.")
+    if voice_type not in ("my_voice", "female_actor", "male_actor"):
+        voice_type = "female_actor" if gender == "여성" else "male_actor"
+
+    src_path = None
+    cfg_value = 2.0
+    steps = 10
+    target_db = -6.0
+    speed = 1.0
+
+    conn = get_db()
+    if from_output_id:
+        row = conn.execute("SELECT * FROM outputs WHERE id = ?", (from_output_id,)).fetchone()
+        conn.close()
+        if not row:
+            raise HTTPException(404, "생성 기록에서 해당 음성을 찾을 수 없습니다.")
+        od = dict(row)
+        p = Path(od["audio_path"])
+        if not p.exists():
+            for cand in (OUTPUTS_DIR / p.name, DATA_DIR / od["audio_path"]):
+                if cand.exists():
+                    p = cand
+                    break
+        if not p.exists():
+            raise HTTPException(404, "원본 생성 오디오 파일을 찾을 수 없습니다.")
+        src_path = p
+        if not style.strip():
+            style = od.get("style") or ""
+        if not sample_text.strip():
+            sample_text = od.get("text") or ""
+        cfg_value = float(od.get("cfg_value") if od.get("cfg_value") is not None else 2.0)
+        steps = int(od.get("steps") if od.get("steps") is not None else 10)
+        target_db = float(od.get("target_db") if od.get("target_db") is not None else -6.0)
+        speed = float(od.get("speed") if od.get("speed") is not None else 1.0)
+    elif from_voice_id:
+        row = conn.execute("SELECT * FROM voices WHERE id = ?", (from_voice_id,)).fetchone()
+        conn.close()
+        if not row:
+            raise HTTPException(404, "내 음성 목록에서 해당 음성을 찾을 수 없습니다.")
+        vd = dict(row)
+        p = Path(vd["audio_path"])
+        if not p.exists():
+            cand = VOICES_DIR / p.name
+            if cand.exists():
+                p = cand
+        if not p.exists():
+            raise HTTPException(404, "원본 음성 파일을 찾을 수 없습니다.")
+        src_path = p
+        if not style.strip():
+            style = vd.get("style") or ""
+        cfg_value = float(vd.get("cfg_value") if vd.get("cfg_value") is not None else 2.0)
+        steps = int(vd.get("steps") if vd.get("steps") is not None else 10)
+        target_db = float(vd.get("target_db") if vd.get("target_db") is not None else -6.0)
+        speed = float(vd.get("speed") if vd.get("speed") is not None else 1.0)
+    else:
+        conn.close()
+        raise HTTPException(400, "공유할 대상 음성 ID가 필요합니다.")
+
+    shared_id = f"shared_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+    audio_file = f"{shared_id}.wav"
+    cached_wav = SHARED_CACHE_DIR / audio_file
+
+    # 오디오 길이 확인 및 3초~28초 범위 정규화 저장
+    try:
+        data, sr = sf.read(str(src_path))
+        dur = len(data) / float(sr)
+        if dur < 3.0 and len(data) > 0:
+            gap = np.zeros((int(0.15 * sr),) + data.shape[1:], dtype=data.dtype)
+            chunks = [data]
+            total_len = len(data)
+            target_len = int(3.2 * sr)
+            while total_len < target_len:
+                chunks.append(gap)
+                chunks.append(data)
+                total_len += len(gap) + len(data)
+            data = np.concatenate(chunks, axis=0)
+        elif dur > 28.0:
+            data = data[: int(28.0 * sr)]
+        duration = round(len(data) / float(sr), 2)
+        sf.write(str(cached_wav), data, sr)
+    except Exception:
+        shutil.copy2(str(src_path), str(cached_wav))
+        duration = 5.0
+
+    author_name = (author or _load_github_config().get("author") or "creatorjosephkr").strip()
+    if author.strip():
+        _save_github_config({"author": author_name})
+
+    new_entry = {
+        "id": shared_id,
+        "name": name,
+        "gender": gender,
+        "voice_type": voice_type,
+        "style": style.strip(),
+        "sample_text": sample_text.strip()[:200],
+        "duration": duration,
+        "cfg_value": cfg_value,
+        "steps": steps,
+        "target_db": target_db,
+        "speed": speed,
+        "audio_file": audio_file,
+        "author": author_name,
+        "created_at": round(time.time(), 2),
+    }
+
+    tok, method = _resolve_github_token(github_token)
+    pushed_remote = False
+    push_error = None
+
+    # 방법 1: GitHub REST API를 통한 직접 업로드
+    if tok:
+        try:
+            wav_b64 = base64.b64encode(cached_wav.read_bytes()).decode("ascii")
+            _github_api_request(
+                "PUT",
+                f"contents/shared_voices/{audio_file}",
+                token=tok,
+                data={
+                    "message": f"feat(shared-voices): export voice '{name}' ({shared_id})",
+                    "content": wav_b64,
+                    "branch": SHARED_VOICES_BRANCH,
+                },
+                timeout=30,
+            )
+
+            # 기존 index.json 조회 (sha 획득)
+            existing_list = []
+            idx_sha = None
+            try:
+                idx_res = _github_api_request(
+                    "GET",
+                    f"contents/shared_voices/index.json?ref={SHARED_VOICES_BRANCH}",
+                    token=tok,
+                    timeout=15,
+                )
+                if isinstance(idx_res, dict) and idx_res.get("content"):
+                    idx_sha = idx_res.get("sha")
+                    existing_list = json.loads(base64.b64decode(idx_res["content"]).decode("utf-8"))
+            except urllib.error.HTTPError as he:
+                if he.code != 404:
+                    raise
+
+            if not isinstance(existing_list, list):
+                existing_list = []
+            existing_list = [x for x in existing_list if x.get("id") != shared_id]
+            existing_list.insert(0, new_entry)
+
+            idx_b64 = base64.b64encode(
+                json.dumps(existing_list, ensure_ascii=False, indent=2).encode("utf-8")
+            ).decode("ascii")
+            put_payload = {
+                "message": f"chore(shared-voices): update index.json for '{name}'",
+                "content": idx_b64,
+                "branch": SHARED_VOICES_BRANCH,
+            }
+            if idx_sha:
+                put_payload["sha"] = idx_sha
+
+            _github_api_request(
+                "PUT",
+                "contents/shared_voices/index.json",
+                token=tok,
+                data=put_payload,
+                timeout=20,
+            )
+            pushed_remote = True
+        except Exception as e:
+            push_error = str(e)
+            print(f"[SharedVoices] GitHub REST API 업로드 오류: {e}")
+
+    # 방법 2: 로컬 Git 저장소가 있는 경우 로컬 파일 동기화 및 필요 시 git push 폴백
+    authoritative_list = None
+    try:
+        if pushed_remote and isinstance(existing_list, list):
+            authoritative_list = existing_list
+        if LOCAL_SHARED_DIR.exists() or _can_use_local_git():
+            LOCAL_SHARED_DIR.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(str(cached_wav), str(LOCAL_SHARED_DIR / audio_file))
+            local_idx_file = LOCAL_SHARED_DIR / "index.json"
+            if authoritative_list is not None:
+                local_list = authoritative_list
+            else:
+                local_list = []
+                if local_idx_file.exists():
+                    try:
+                        local_list = json.loads(local_idx_file.read_text(encoding="utf-8"))
+                    except Exception:
+                        local_list = []
+                local_list = [x for x in local_list if x.get("id") != shared_id]
+                local_list.insert(0, new_entry)
+                authoritative_list = local_list
+            local_idx_file.write_text(json.dumps(local_list, ensure_ascii=False, indent=2), encoding="utf-8")
+
+            if not pushed_remote and _can_use_local_git():
+                repo_root = str(Path(__file__).parent.resolve())
+                subprocess.run(["git", "add", f"shared_voices/{audio_file}", "shared_voices/index.json"], cwd=repo_root, check=True, timeout=10)
+                subprocess.run(["git", "commit", "-m", f"feat(shared-voices): export voice '{name}'"], cwd=repo_root, check=True, timeout=10)
+                subprocess.run(["git", "push", "origin", SHARED_VOICES_BRANCH], cwd=repo_root, check=True, timeout=25)
+                pushed_remote = True
+    except Exception as e:
+        if not push_error:
+            push_error = str(e)
+        print(f"[SharedVoices] 로컬 git 동기화/푸시 참고: {e}")
+
+    if not pushed_remote:
+        if cached_wav.exists():
+            try:
+                cached_wav.unlink()
+            except Exception:
+                pass
+        if not tok:
+            raise HTTPException(
+                400,
+                "깃허브 저장소 업로드 권한(GitHub Personal Access Token)이 필요합니다. 아래 GitHub 토큰 입력란에 토큰을 입력해 주세요.",
+            )
+        raise HTTPException(500, f"깃허브 공유 저장소 업로드 실패: {push_error}")
+
+    # 캐시 index.json 즉시 갱신 (원격 저장소 목록 기준)
+    try:
+        cur_items = authoritative_list if isinstance(authoritative_list, list) else _fetch_shared_voices_index(force_refresh=True)
+        cur_items = [x for x in cur_items if x.get("id") != shared_id]
+        cur_items.insert(0, new_entry)
+        (SHARED_CACHE_DIR / "index.json").write_text(
+            json.dumps(cur_items, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        _shared_index_cache["items"] = cur_items
+        _shared_index_cache["ts"] = time.time()
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "voice": new_entry,
+        "repo_url": f"https://github.com/{SHARED_VOICES_REPO}/tree/{SHARED_VOICES_BRANCH}/shared_voices",
+    }
+
+
 # Static files — must be last
+if (Path(__file__).parent / "spon").exists():
+    app.mount("/spon", StaticFiles(directory=str(Path(__file__).parent / "spon")), name="spon")
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 if __name__ == "__main__":

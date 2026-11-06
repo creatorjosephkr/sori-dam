@@ -59,6 +59,9 @@ const TRANSLATIONS = {
     'create.logTitle': '실시간 처리 로그',
     'create.tabBasic': '기본 음성',
     'create.tabMy': '내 음성',
+    'create.tabShared': '공유 저장소',
+    'create.browseSharedBtn': '공유저장소 목록 · 선택',
+    'create.voiceHintShared': '깃허브 공유 저장소의 음성을 선택하면 자동으로 가져와(Import) 내 음성으로 적용됩니다',
     'create.guide': '음성 스타일을 직접 입력하거나 음성을 선택하세요',
     'create.styleLabel': '음성 스타일',
     'create.styleOptional': '선택사항',
@@ -144,6 +147,11 @@ const TRANSLATIONS = {
     'voice.group.my': '내 목소리',
     'voice.group.femaleActor': 'Ai성우-여성',
     'voice.group.maleActor': 'Ai성우-남성',
+    'voice.group.sharedRepo': '공유 저장소',
+    'voices.sharedRepoBtn': '공유저장소 음성 가져오기',
+    'shared.modalTitle': '깃허브 공유 저장소 음성 목록',
+    'shared.refresh': '새로고침',
+    'history.shareRepo': '공유저장소 공유하기',
     // 음성 플레이어 텍스트
     'voice.play': '재생',
     'voice.pause': '일시정지',
@@ -167,8 +175,12 @@ const TRANSLATIONS = {
     'yt.setEnd': '종료시간 등록 →]',
     // 후원 모달
     'donate.title': '개발자 후원하기',
+    'donate.speech': '소리담을 응원해주셔서 정말 고마워요!<br>따뜻한 커피 한 잔의 후원이 개발에 큰 힘이 됩니다!',
+    'donate.kakaobankTitle': '카카오뱅크 후원',
+    'donate.paypalTitle': 'PayPal 후원',
     'donate.desc': '소리담을 응원해주셔서 감사합니다!<br>카카오뱅크 QR코드로 후원하실 수 있어요.',
     'donate.qrDesc': '카메라로 QR코드를 스캔하시면<br>카카오뱅크 송금 화면으로 이동합니다.',
+    'donate.paypalDesc': 'PayPal 로고를 클릭하시면<br>기본 웹브라우저에서 후원 창이 열립니다.',
     // 음성 힌트
     'create.voiceHintMy': '등록한 음성을 선택하세요. 내 음성 관리 메뉴에서 본인의 음성을 등록할 수 있습니다',
     // 기본 음성 이름 (한국어는 원래 이름 그대로)
@@ -293,6 +305,9 @@ const TRANSLATIONS = {
     'create.logTitle': 'Live Processing Log',
     'create.tabBasic': 'Built-in Voices',
     'create.tabMy': 'My Voices',
+    'create.tabShared': 'Shared Repo',
+    'create.browseSharedBtn': 'Browse Shared Voices',
+    'create.voiceHintShared': 'Selecting a voice from the GitHub shared repository automatically imports and applies it',
     'create.guide': 'Enter a voice style or select a voice',
     'create.styleLabel': 'Voice Style',
     'create.styleOptional': 'Optional',
@@ -378,6 +393,11 @@ const TRANSLATIONS = {
     'voice.group.my': 'My Voice',
     'voice.group.femaleActor': 'AI Actor - Female',
     'voice.group.maleActor': 'AI Actor - Male',
+    'voice.group.sharedRepo': 'Shared Repo',
+    'voices.sharedRepoBtn': 'Import from Shared Repo',
+    'shared.modalTitle': 'GitHub Shared Repository Voices',
+    'shared.refresh': 'Refresh',
+    'history.shareRepo': 'Share to Repo',
     // Voice player text
     'voice.play': 'Play',
     'voice.pause': 'Pause',
@@ -401,8 +421,12 @@ const TRANSLATIONS = {
     'yt.setEnd': 'Set End →]',
     // Donate modal
     'donate.title': 'Support the Developer',
+    'donate.speech': 'Thank you so much for supporting Sori-Dam!<br>Buying a warm cup of coffee keeps development going!',
+    'donate.kakaobankTitle': 'KakaoBank Donate',
+    'donate.paypalTitle': 'PayPal Donate',
     'donate.desc': 'Thank you for supporting Sori-Dam!<br>You can donate via KakaoBank QR code.',
     'donate.qrDesc': 'Scan the QR code with your camera<br>to open the KakaoBank transfer screen.',
+    'donate.paypalDesc': 'Click the PayPal logo to open<br>the donation page in your browser.',
     // Voice hint
     'create.voiceHintMy': 'Select a registered voice. You can record and register your own voice in Manage Voices.',
     // 기본 음성 이름 (영어)

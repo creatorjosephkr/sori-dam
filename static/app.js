@@ -31,6 +31,9 @@ const ico = {
   copy:     `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
   chevron:  `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>`,
   text:     `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="13" y2="17"/></svg>`,
+  share:    `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>`,
+  importCloud: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>`,
+  check:    `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`,
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -43,9 +46,13 @@ const S = {
   tab: 'basic',
   basicVoices: [],
   myVoices: [],
+  sharedVoices: [],
   outputs: [],
   currentOutput: null,
   voiceGenderTab: 'all',
+  sharedGenderFilter: 'all',
+  sharedModalGenderFilter: 'all',
+  selectedSharedLocalVoiceId: null,
 };
 
 const expandedOutputs = new Set();
@@ -706,10 +713,11 @@ async function api(method, url, body) {
 
 // ── Fetch ─────────────────────────────────────────────────────────────────────
 async function loadAll() {
-  [S.basicVoices, S.myVoices, S.outputs] = await Promise.all([
+  [S.basicVoices, S.myVoices, S.outputs, S.sharedVoices] = await Promise.all([
     api('GET', '/api/basic-voices'),
     api('GET', '/api/voices'),
     api('GET', '/api/outputs'),
+    api('GET', '/api/shared-voices').catch(() => []),
   ]);
   if (S.myVoices) {
     S.myVoices.forEach(v => {
@@ -727,6 +735,15 @@ async function refreshMyVoices() {
   }
 }
 
+async function refreshSharedVoices(force = false) {
+  try {
+    S.sharedVoices = await api('GET', `/api/shared-voices${force ? '?refresh=true' : ''}`);
+  } catch (e) {
+    console.warn('[SharedVoices] 목록 조회 실패:', e);
+  }
+  return S.sharedVoices;
+}
+
 async function refreshOutputs() {
   S.outputs = await api('GET', '/api/outputs');
 }
@@ -735,6 +752,7 @@ async function refreshOutputs() {
 function renderVoiceSelect() {
   const sel = document.getElementById('voiceSelect');
   if (!sel) return;
+  const prevVal = sel.value;
   sel.innerHTML = '';
 
   const addOpt = (val, label, disabled) => {
@@ -770,6 +788,31 @@ function renderVoiceSelect() {
     if (defaultVoice) {
       sel.value = defaultVoice.id;
     }
+  } else if (S.tab === 'shared') {
+    if (!S.sharedVoices || S.sharedVoices.length === 0) {
+      addOpt('', '공유 저장소에 등록된 음성이 없습니다', true);
+    } else {
+      addOpt('', '공유 저장소 음성을 선택하세요 (선택 시 자동 가져오기)', false);
+      const addSharedGroup = (label, list) => {
+        if (!list.length) return;
+        const grp = document.createElement('optgroup');
+        grp.label = label;
+        list.forEach(sv => {
+          const o = document.createElement('option');
+          o.value = sv.id;
+          const styleSuffix = sv.style ? ` — ${sv.style}` : '';
+          const importedTag = sv.imported ? ' [가져옴]' : '';
+          o.textContent = `${sv.name}${styleSuffix}${importedTag}`;
+          grp.appendChild(o);
+        });
+        sel.appendChild(grp);
+      };
+      addSharedGroup('공유 음성 - 여성', S.sharedVoices.filter(v => v.gender === '여성'));
+      addSharedGroup('공유 음성 - 남성', S.sharedVoices.filter(v => v.gender === '남성'));
+      if (prevVal && S.sharedVoices.some(v => v.id === prevVal)) {
+        sel.value = prevVal;
+      }
+    }
   } else {
     if (S.myVoices.length === 0) {
       addOpt('', t('create.noVoice'), true);
@@ -781,14 +824,101 @@ function renderVoiceSelect() {
       addGroup(t('voice.group.my'), myVoices,     'id', 'name', false);
       addGroup(t('voice.group.femaleActor'), femaleActors, 'id', 'name', false);
       addGroup(t('voice.group.maleActor'), maleActors,   'id', 'name', false);
+      if (prevVal && S.myVoices.some(v => String(v.id) === String(prevVal))) {
+        sel.value = prevVal;
+      }
     }
   }
+}
+
+function renderSharedRepoVoices(el) {
+  const genderFilter = S.sharedGenderFilter || 'all';
+  const allShared = S.sharedVoices || [];
+  const filtered = genderFilter === 'all'
+    ? allShared
+    : allShared.filter(v => v.gender === genderFilter);
+
+  const headerBar = `
+    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 10px; margin-bottom: 14px;">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary);">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="color: var(--text-primary); flex-shrink: 0;" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+        <span>깃허브 공유 저장소 <strong style="color: var(--text-primary);">creatorjosephkr/sori-dam</strong> (${filtered.length}개)</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div class="segment-control" style="padding: 2px;">
+          <button type="button" class="segment-btn ${genderFilter === 'all' ? 'active' : ''}" data-sva="filter-gender" data-gender="all" style="padding: 3px 10px; font-size: 11.5px;">전체</button>
+          <button type="button" class="segment-btn ${genderFilter === '여성' ? 'active' : ''}" data-sva="filter-gender" data-gender="여성" style="padding: 3px 10px; font-size: 11.5px;">여성</button>
+          <button type="button" class="segment-btn ${genderFilter === '남성' ? 'active' : ''}" data-sva="filter-gender" data-gender="남성" style="padding: 3px 10px; font-size: 11.5px;">남성</button>
+        </div>
+        <button type="button" class="btn btn-xs btn-secondary" data-sva="refresh" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11.5px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+          새로고침
+        </button>
+      </div>
+    </div>
+  `;
+
+  if (filtered.length === 0) {
+    el.innerHTML = headerBar + `
+      <div class="empty-state" style="padding: 40px 0; text-align: center; color: var(--text-secondary);">
+        <p style="font-weight: 500; margin-bottom: 4px;">공유 저장소에 표시할 음성이 없습니다</p>
+        <p style="font-size: 12.5px; opacity: 0.75;">[생성 기록] 화면에서 마음에 드는 음성을 공유 저장소에 공유해보세요!</p>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = headerBar + filtered.map(sv => {
+    const isPlaying = sharedPreviewPlayer.activeId === sv.id && !sharedPreviewPlayer.el.paused;
+    return `
+      <div class="voice-item-card shared-voice-card" data-shared-id="${esc(sv.id)}" style="background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 15px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 7px; overflow: hidden;">
+            <span class="badge ${sv.gender === '여성' ? 'badge-female' : 'badge-male'}" style="margin: 0; padding: 2px 7px; font-size: 11px;">${esc(sv.gender || '여성')}</span>
+            <span style="font-weight: 700; color: var(--text-primary); font-size: 14px;">${esc(sv.name)}</span>
+            ${sv.style ? `<span style="font-size: 11.5px; color: var(--accent); font-weight: 500;">| 스타일: ${esc(sv.style)}</span>` : ''}
+            <span style="font-size: 11.5px; color: var(--text-tertiary);">${fmtTime(sv.duration || 0)}</span>
+            ${sv.author ? `<span style="font-size: 11px; color: var(--text-tertiary);">· by ${esc(sv.author)}</span>` : ''}
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <button type="button" class="btn btn-xs ${isPlaying ? 'btn-primary' : 'btn-ghost'}" data-sva="play" data-shared-id="${esc(sv.id)}" data-url="${esc(sv.audio_url)}" style="display: inline-flex; align-items: center; gap: 4px; padding: 5px 11px; font-size: 12px;">
+              ${isPlaying ? ico.pause : ico.play} <span>${isPlaying ? '일시정지' : '샘플 듣기'}</span>
+            </button>
+            <button type="button" class="btn btn-xs btn-ghost" data-sva="download" data-shared-id="${esc(sv.id)}" data-url="${esc(sv.audio_url)}" data-name="${esc(sv.name)}" style="display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; font-size: 12px;">
+              ${ico.download} PC에 저장
+            </button>
+            ${sv.imported ? `
+              <span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11.5px; font-weight: 600; color: #30d158; background: rgba(48,209,88,0.1); border-radius: 6px;">
+                ${ico.check} 가져옴
+              </span>
+            ` : `
+              <button type="button" class="btn btn-xs btn-secondary" data-sva="import" data-shared-id="${esc(sv.id)}" style="display: inline-flex; align-items: center; gap: 4px; padding: 5px 11px; font-size: 12px; font-weight: 600;">
+                ${ico.importCloud} 내 음성으로 가져오기
+              </button>
+            `}
+            <button type="button" class="btn btn-xs btn-primary" data-sva="use" data-shared-id="${esc(sv.id)}" style="display: inline-flex; align-items: center; gap: 4px; padding: 5px 11px; font-size: 12px; font-weight: 600;">
+              바로 사용하기
+            </button>
+          </div>
+        </div>
+        ${sv.sample_text ? `
+          <div style="font-size: 12.5px; color: var(--text-secondary); background: var(--bg); padding: 7px 11px; border-radius: 8px; border: 1px solid var(--border-light);">
+            "${esc(sv.sample_text)}"
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
 }
 
 function renderMyVoices() {
   const activeTypeTab = document.querySelector('#voiceTypeTabControl .segment-btn.active')?.dataset.voiceTypeTab || 'my_voice';
   const el = document.getElementById('myVoicesList');
   if (!el) return;
+
+  if (activeTypeTab === 'shared_repo') {
+    renderSharedRepoVoices(el);
+    return;
+  }
 
   let filteredVoices = [];
   if (activeTypeTab === 'my_voice') {
@@ -830,6 +960,12 @@ function renderMyVoices() {
           ${style ? `<span style="font-size: 11.5px; color: var(--accent); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="스타일: ${esc(style)}">| 스타일: ${esc(style)}</span>` : ''}
         </div>
         <div style="display: flex; gap: 6px; flex-shrink: 0;">
+          <button class="btn btn-xs btn-ghost" data-va="download" data-id="${v.id}" data-url="${v.original_audio_url || v.audio_url}" data-name="${esc(v.name)}" style="padding: 3px 8px; font-size: 11.5px; display: inline-flex; align-items: center; gap: 3px;">
+            ${ico.download} PC에 저장
+          </button>
+          <button class="btn btn-xs btn-ghost" data-va="share" data-id="${v.id}" style="padding: 3px 8px; font-size: 11.5px; display: inline-flex; align-items: center; gap: 3px;">
+            ${ico.share} 공유저장소 공유
+          </button>
           <button class="btn btn-xs btn-danger-ghost" data-va="delete" data-id="${v.id}" data-name="${esc(v.name)}" style="padding: 3px 8px; font-size: 11.5px; display: inline-flex; align-items: center; gap: 3px;">
             ${ico.trash || `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`} 삭제
           </button>
@@ -990,6 +1126,7 @@ function renderOutputs() {
             편집
           </button>
           <button class="btn btn-xs btn-ghost" data-oa="save" data-id="${o.id}" data-dur="${o.duration}">${ico.bookmark} 내 음성 저장</button>
+          <button class="btn btn-xs btn-ghost" data-oa="share" data-id="${o.id}" data-dur="${o.duration}">${ico.share} ${t('history.shareRepo')}</button>
           <button class="btn btn-xs btn-danger-ghost" data-oa="delete" data-id="${o.id}">${ico.trash} 삭제</button>
         </div>
       </div>`;
@@ -1097,6 +1234,26 @@ async function handleGenerate() {
     } else if (S.tab === 'my' && !voiceId) {
       toast('내 음성을 선택하세요.', 'error');
       return;
+    } else if (S.tab === 'shared' && !voiceId) {
+      toast('공유 저장소 음성을 선택하세요.', 'error');
+      return;
+    }
+
+    let effectiveVoiceType = S.tab;
+    let effectiveVoiceId = voiceId;
+    if (S.tab === 'shared') {
+      effectiveVoiceType = 'my';
+      const sv = (S.sharedVoices || []).find(v => v.id === voiceId);
+      if (sv && sv.imported && sv.local_voice_id) {
+        effectiveVoiceId = sv.local_voice_id;
+      } else {
+        const imported = await importSharedVoiceById(voiceId, { silent: true });
+        if (!imported || !imported.id) {
+          toast('공유 저장소 음성 가져오기에 실패했습니다.', 'error');
+          return;
+        }
+        effectiveVoiceId = imported.id;
+      }
     }
 
     const cfg = document.getElementById('cfgSlider').value;
@@ -1242,14 +1399,14 @@ async function handleGenerate() {
       const fd = new FormData();
       fd.append('text', text);
       fd.append('style', style);
-      fd.append('voice_type', S.tab);
+      fd.append('voice_type', effectiveVoiceType);
       fd.append('cfg_value', cfg);
       fd.append('steps', steps);
       fd.append('target_db', targetDb);
       fd.append('speed', speed);
       fd.append('session_id', sessionId);
-      if (S.tab === 'basic') fd.append('basic_voice_id', voiceId);
-      else fd.append('my_voice_id', voiceId);
+      if (effectiveVoiceType === 'basic') fd.append('basic_voice_id', effectiveVoiceId);
+      else fd.append('my_voice_id', effectiveVoiceId);
 
       const result = await api('POST', '/api/generate', fd);
       S.currentOutput = result;
@@ -1416,20 +1573,193 @@ async function openOutputTrimModal(blob, output, onApply) {
 }
 
 
+// ── Shared Voice Preview Player ───────────────────────────────────────────────
+const sharedPreviewPlayer = {
+  el: new Audio(),
+  activeId: null,
+  init() {
+    this.el.addEventListener('ended', () => {
+      this.activeId = null;
+      renderMyVoices();
+      renderSharedVoicesModalList();
+    });
+    this.el.addEventListener('pause', () => {
+      renderMyVoices();
+      renderSharedVoicesModalList();
+    });
+    this.el.addEventListener('play', () => {
+      renderMyVoices();
+      renderSharedVoicesModalList();
+    });
+  },
+  toggle(sharedId, url) {
+    if (this.activeId === sharedId) {
+      if (this.el.paused) this.el.play().catch(() => {});
+      else this.el.pause();
+      return;
+    }
+    if (player.el && !player.el.paused) player.el.pause();
+    if (historyPlayer.el && !historyPlayer.el.paused) historyPlayer.el.pause();
+    if (myVoicePlayer.el && !myVoicePlayer.el.paused) myVoicePlayer.el.pause();
+    this.activeId = sharedId;
+    this.el.src = url;
+    this.el.load();
+    this.el.play().catch(err => {
+      toast('공유 음성 샘플 재생 실패: ' + err.message, 'error');
+    });
+  },
+  stop() {
+    if (!this.el.paused) this.el.pause();
+    this.activeId = null;
+  }
+};
+sharedPreviewPlayer.init();
+
+function applyVoiceSettingsToCreateForm(voice) {
+  if (!voice) return;
+  if (voice.style !== undefined) {
+    document.getElementById('styleInput').value = voice.style || '';
+  }
+  if (voice.cfg_value !== undefined && voice.cfg_value !== null) {
+    const cfgVal = parseFloat(voice.cfg_value);
+    document.getElementById('cfgSlider').value = cfgVal;
+    document.getElementById('cfgVal').textContent = cfgVal.toFixed(1);
+  }
+  if (voice.steps !== undefined && voice.steps !== null) {
+    const stepsVal = parseInt(voice.steps);
+    document.getElementById('stepsSlider').value = stepsVal;
+    document.getElementById('stepsVal').textContent = stepsVal;
+  }
+  if (voice.target_db !== undefined && voice.target_db !== null) {
+    const dbVal = parseInt(voice.target_db);
+    document.getElementById('targetDbSlider').value = dbVal;
+    document.getElementById('targetDbVal').textContent = `${dbVal} dB`;
+  }
+  if (voice.speed !== undefined && voice.speed !== null) {
+    const speedVal = parseFloat(voice.speed);
+    document.getElementById('speedSlider').value = speedVal;
+    document.getElementById('speedVal').textContent = `${speedVal.toFixed(1)}x`;
+  }
+}
+
+async function importSharedVoiceById(sharedId, { silent = false } = {}) {
+  if (!sharedId) return null;
+  if (!silent) toast('공유 저장소에서 음성을 가져오는 중...', 'info');
+  const fd = new FormData();
+  fd.append('shared_id', sharedId);
+  const imported = await api('POST', '/api/shared-voices/import', fd);
+  await Promise.all([refreshMyVoices(), refreshSharedVoices(false)]);
+  renderMyVoices();
+  renderVoiceSelect();
+  renderSharedVoicesModalList();
+  if (!silent) {
+    if (imported.already_imported) {
+      toast(`"${imported.name}" 음성이 적용되었습니다.`, 'success');
+    } else {
+      toast(`공유 저장소에서 "${imported.name}" 음성을 가져왔습니다!`, 'success');
+    }
+  }
+  return imported;
+}
+
+async function downloadVoiceToPC(url, voiceName) {
+  if (!url) {
+    toast('저장할 음성 파일 경로를 찾을 수 없습니다.', 'error');
+    return;
+  }
+  const cleanName = (voiceName || 'voice').replace(/[\\/:*?"<>|]+/g, '_').trim() || 'voice';
+  const fileName = cleanName.toLowerCase().endsWith('.wav') ? cleanName : `${cleanName}.wav`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+    toast(`"${fileName}" 파일을 PC에 저장합니다.`, 'success');
+  } catch (err) {
+    toast('음성 파일 저장 실패: ' + err.message, 'error');
+  }
+}
+
 // ── Voice handlers ────────────────────────────────────────────────────────────
 function bindVoicesListEvents(listId) {
   const el = document.getElementById(listId);
   if (!el) return;
   
   el.addEventListener('click', async e => {
+    // 1. 공유 저장소 탭 액션 처리 (data-sva)
+    const svaBtn = e.target.closest('[data-sva]');
+    if (svaBtn) {
+      const { sva, sharedId, url, gender, name } = svaBtn.dataset;
+      if (sva === 'filter-gender') {
+        S.sharedGenderFilter = gender || 'all';
+        renderMyVoices();
+      } else if (sva === 'refresh') {
+        toast('깃허브 공유 저장소 목록을 새로고침합니다...', 'info');
+        await refreshSharedVoices(true);
+        renderMyVoices();
+        renderVoiceSelect();
+        toast('공유 저장소 목록이 최신 상태로 업데이트되었습니다.', 'success');
+      } else if (sva === 'play') {
+        sharedPreviewPlayer.toggle(sharedId, url);
+      } else if (sva === 'download') {
+        await downloadVoiceToPC(url, name);
+      } else if (sva === 'import') {
+        try {
+          svaBtn.disabled = true;
+          await importSharedVoiceById(sharedId);
+        } catch (err) {
+          toast('가져오기 실패: ' + err.message, 'error');
+        } finally {
+          svaBtn.disabled = false;
+        }
+      } else if (sva === 'use') {
+        try {
+          svaBtn.disabled = true;
+          const imported = await importSharedVoiceById(sharedId, { silent: true });
+          if (imported && imported.id) {
+            sharedPreviewPlayer.stop();
+            showPage('create');
+            // 내 음성 탭 활성화 및 가져온 음성 자동 선택
+            document.querySelectorAll('#tabControl .segment-btn').forEach(b => {
+              b.classList.toggle('active', b.dataset.tab === 'my');
+            });
+            S.tab = 'my';
+            document.getElementById('voiceSelectHint').textContent = getVoiceHint('my');
+            renderVoiceSelect();
+            const sel = document.getElementById('voiceSelect');
+            if (sel) sel.value = imported.id;
+            applyVoiceSettingsToCreateForm(imported);
+            toast(`"${imported.name}" 음성이 선택되었습니다. 텍스트를 입력해 생성해보세요!`, 'success');
+          }
+        } catch (err) {
+          toast('음성 적용 실패: ' + err.message, 'error');
+        } finally {
+          svaBtn.disabled = false;
+        }
+      }
+      return;
+    }
+
+    // 2. 내 음성 탭 액션 처리 (data-va)
     const btn = e.target.closest('[data-va]');
     if (!btn) return;
     const { va, url, name, id } = btn.dataset;
 
     if (va === 'play') {
       myVoicePlayer.play(id, url);
+    } else if (va === 'download') {
+      await downloadVoiceToPC(url, name);
     } else if (va === 'rename') {
       showRenameModal(id, name, btn.dataset.gender);
+    } else if (va === 'share') {
+      showExportSharedVoiceModal({ voiceId: id });
     } else if (va === 'delete') {
       await confirmDelete(`"${name}" 음성을 삭제할까요?`, async () => {
         if (myVoicePlayer.activeId === String(id)) {
@@ -1437,7 +1767,7 @@ function bindVoicesListEvents(listId) {
           myVoicePlayer.activeId = null;
         }
         await api('DELETE', `/api/voices/${id}`);
-        await refreshMyVoices();
+        await Promise.all([refreshMyVoices(), refreshSharedVoices(false)]);
         renderMyVoices();
         renderVoiceSelect();
         toast('음성이 삭제되었습니다.');
@@ -1505,6 +1835,8 @@ document.getElementById('outputsList').addEventListener('click', async e => {
     if (output) historyPlayer.play(output.id, output.audio_url);
   } else if (oa === 'save') {
     showSaveVoiceModal(id, parseFloat(dur));
+  } else if (oa === 'share') {
+    showExportSharedVoiceModal({ outputId: id });
   } else if (oa === 'edit') {
     toast('오디오 로딩 중...', 'info');
     try {
@@ -2513,6 +2845,224 @@ function showSaveVoiceModal(outputId, duration) {
   });
 }
 
+// ── Export to GitHub Shared Repository modal ─────────────────────────────────
+async function showExportSharedVoiceModal({ outputId = null, voiceId = null } = {}) {
+  let defaultName = '';
+  let defaultStyle = '';
+  let defaultSampleText = '';
+  let defaultGender = '여성';
+  let defaultVoiceType = 'female_actor';
+  let durationSec = 0;
+
+  if (outputId) {
+    const out = S.outputs.find(o => String(o.id) === String(outputId));
+    if (out) {
+      defaultStyle = out.style || '';
+      defaultSampleText = out.text || '';
+      durationSec = out.duration || 0;
+      if (out.voice_name && !['여성 – 기본', '남성 – 기본', '스타일 지정'].includes(out.voice_name)) {
+        defaultName = out.voice_name;
+      }
+      if ((out.voice_name || '').includes('남성') || (out.style || '').includes('남성') || (out.style || '').includes('남자')) {
+        defaultGender = '남성';
+        defaultVoiceType = 'male_actor';
+      }
+    }
+  } else if (voiceId) {
+    const v = S.myVoices.find(x => String(x.id) === String(voiceId));
+    if (v) {
+      defaultName = v.name || '';
+      defaultStyle = v.style || '';
+      defaultGender = v.gender || '여성';
+      defaultVoiceType = v.voice_type || (defaultGender === '여성' ? 'female_actor' : 'male_actor');
+    }
+  }
+
+  let authInfo = { configured: false, method: 'none', repo: 'creatorjosephkr/sori-dam', author: 'creatorjosephkr' };
+  try {
+    authInfo = await api('GET', '/api/shared-voices/auth-status');
+  } catch (_) {}
+
+  const authBadgeHtml = authInfo.configured
+    ? `<div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-radius:8px; background:rgba(48,209,88,0.08); border:1px solid rgba(48,209,88,0.25); font-size:12px; color:#30d158; font-weight:600; margin-bottom:10px;">
+         <span style="display:inline-flex; align-items:center; gap:6px;">${ico.check} 깃허브 저장소(${esc(authInfo.repo)}) 업로드 인증 연결됨</span>
+         <button type="button" id="toggleGhTokenInputBtn" class="btn btn-xs btn-ghost" style="font-size:11px; padding:2px 6px;">토큰 변경</button>
+       </div>`
+    : `<div style="padding:8px 12px; border-radius:8px; background:rgba(255,149,0,0.1); border:1px solid rgba(255,149,0,0.28); font-size:12px; color:#ff9500; font-weight:600; margin-bottom:10px;">
+         깃허브 저장소(${esc(authInfo.repo)})에 업로드하려면 GitHub Personal Access Token(repo 권한)을 1회 입력해 주세요.
+       </div>`;
+
+  const content = `
+    ${authBadgeHtml}
+    <div class="form-group" id="ghTokenInputWrap" style="${authInfo.configured ? 'display:none;' : ''} margin-bottom:12px;">
+      <label class="form-label">GitHub Personal Access Token <span class="text-secondary" style="font-weight:400;">(최초 1회 저장됨)</span></label>
+      <input type="password" id="exportGhToken" class="input" placeholder="ghp_... 또는 github_pat_...">
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label class="form-label">공유할 음성 이름</label>
+      <input type="text" id="exportVoiceName" class="input" placeholder="예: 차분한 여성 아나운서, 다큐멘터리 나레이터" value="${esc(defaultName)}">
+    </div>
+    <div class="form-row" style="display:flex; gap:10px; margin-bottom:12px;">
+      <div class="form-group" style="flex:1; margin:0;">
+        <label class="form-label">음성 분류</label>
+        <select id="exportVoiceType" class="input" style="background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-light); border-radius: 6px; outline: none; width: 100%;">
+          <option value="female_actor" ${defaultVoiceType === 'female_actor' ? 'selected' : ''}>Ai성우 - 여성</option>
+          <option value="male_actor" ${defaultVoiceType === 'male_actor' ? 'selected' : ''}>Ai성우 - 남성</option>
+          <option value="my_voice" ${defaultVoiceType === 'my_voice' ? 'selected' : ''}>내 목소리</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1; margin:0;">
+        <label class="form-label">성별</label>
+        <div class="segment-control" id="exportGenderSeg" style="margin-top:2px;">
+          <button type="button" class="segment-btn ${defaultGender === '여성' ? 'active' : ''}" data-gender="여성">여성</button>
+          <button type="button" class="segment-btn ${defaultGender === '남성' ? 'active' : ''}" data-gender="남성">남성</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label class="form-label">음성 스타일 설명 <span class="text-secondary" style="font-weight:400;">(선택사항)</span></label>
+      <input type="text" id="exportVoiceStyle" class="input" placeholder="예: 차분하고 또렷한 뉴스 진행 톤" value="${esc(defaultStyle)}">
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label class="form-label">샘플 대사 안내 문구 <span class="text-secondary" style="font-weight:400;">(선택사항)</span></label>
+      <input type="text" id="exportSampleText" class="input" placeholder="다른 사용자가 참고할 샘플 문장" value="${esc(defaultSampleText)}">
+    </div>
+    <div class="form-group" style="margin-bottom:4px;">
+      <label class="form-label">공유자 표시 이름</label>
+      <input type="text" id="exportAuthor" class="input" value="${esc(authInfo.author || 'creatorjosephkr')}">
+    </div>
+    <div id="exportStatusNotice" class="text-secondary" style="font-size:12px; margin-top:8px;">
+      확인을 누르면 <strong>${esc(authInfo.repo)}</strong> 저장소의 <code>shared_voices/</code>에 업로드되어 공유됩니다.${durationSec ? ` (길이: ${fmtTime(durationSec)})` : ''}
+    </div>
+  `;
+
+  openModal('깃허브 공유 저장소에 음성 공유하기', content, async () => {
+    const name = document.getElementById('exportVoiceName').value.trim();
+    if (!name) {
+      toast('공유할 음성 이름을 입력하세요.', 'error');
+      return false;
+    }
+    const voiceType = document.getElementById('exportVoiceType').value;
+    const gender = document.querySelector('#exportGenderSeg .active')?.dataset.gender || '여성';
+    const style = document.getElementById('exportVoiceStyle').value.trim();
+    const sampleText = document.getElementById('exportSampleText').value.trim();
+    const author = document.getElementById('exportAuthor').value.trim();
+    const ghToken = document.getElementById('exportGhToken')?.value.trim() || '';
+
+    const noticeEl = document.getElementById('exportStatusNotice');
+    if (noticeEl) {
+      noticeEl.innerHTML = `<span style="color:var(--accent); font-weight:600;">깃허브 공유 저장소(creatorjosephkr/sori-dam)에 음성을 업로드하는 중입니다... 잠시만 기다려 주세요.</span>`;
+    }
+
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('gender', gender);
+    fd.append('voice_type', voiceType);
+    fd.append('style', style);
+    fd.append('sample_text', sampleText);
+    fd.append('author', author);
+    if (outputId) fd.append('from_output_id', outputId);
+    if (voiceId) fd.append('from_voice_id', voiceId);
+    if (ghToken) fd.append('github_token', ghToken);
+
+    await api('POST', '/api/shared-voices/export', fd);
+    await refreshSharedVoices(false);
+    renderMyVoices();
+    renderVoiceSelect();
+    renderSharedVoicesModalList();
+    toast(`"${name}" 음성이 깃허브 공유 저장소에 성공적으로 공유되었습니다!`, 'success');
+    return true;
+  });
+
+  requestAnimationFrame(() => {
+    bindGenderSeg('exportGenderSeg');
+    const vtSelect = document.getElementById('exportVoiceType');
+    if (vtSelect) {
+      vtSelect.addEventListener('change', () => {
+        if (vtSelect.value === 'female_actor') {
+          document.querySelectorAll('#exportGenderSeg .segment-btn').forEach(b => b.classList.toggle('active', b.dataset.gender === '여성'));
+        } else if (vtSelect.value === 'male_actor') {
+          document.querySelectorAll('#exportGenderSeg .segment-btn').forEach(b => b.classList.toggle('active', b.dataset.gender === '남성'));
+        }
+      });
+    }
+    const toggleBtn = document.getElementById('toggleGhTokenInputBtn');
+    const tokenWrap = document.getElementById('ghTokenInputWrap');
+    if (toggleBtn && tokenWrap) {
+      toggleBtn.addEventListener('click', () => {
+        tokenWrap.style.display = tokenWrap.style.display === 'none' ? 'block' : 'none';
+      });
+    }
+    document.getElementById('exportVoiceName')?.focus();
+  });
+}
+
+// ── Shared Voices Browser Modal (for Create Screen) ──────────────────────────
+function renderSharedVoicesModalList() {
+  const listEl = document.getElementById('sharedVoicesModalList');
+  const countEl = document.getElementById('sharedModalCount');
+  if (!listEl) return;
+
+  const filter = S.sharedModalGenderFilter || 'all';
+  const all = S.sharedVoices || [];
+  const filtered = filter === 'all' ? all : all.filter(v => v.gender === filter);
+  if (countEl) countEl.textContent = `${filtered.length}개`;
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `
+      <div class="empty-state" style="padding: 36px 0; text-align: center; color: var(--text-secondary);">
+        <p style="font-weight: 500; margin-bottom: 4px;">표시할 공유 저장소 음성이 없습니다</p>
+        <p style="font-size: 12px; opacity: 0.75;">[생성 기록] 화면에서 음성을 공유 저장소에 공유해보세요.</p>
+      </div>`;
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(sv => {
+    const isPlaying = sharedPreviewPlayer.activeId === sv.id && !sharedPreviewPlayer.el.paused;
+    return `
+      <div style="background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 6px; overflow: hidden;">
+            <span class="badge ${sv.gender === '여성' ? 'badge-female' : 'badge-male'}" style="margin: 0; padding: 2px 6px; font-size: 11px;">${esc(sv.gender || '여성')}</span>
+            <span style="font-weight: 700; color: var(--text-primary); font-size: 13.5px;">${esc(sv.name)}</span>
+            ${sv.style ? `<span style="font-size: 11.5px; color: var(--accent); font-weight: 500;">| ${esc(sv.style)}</span>` : ''}
+            <span style="font-size: 11px; color: var(--text-tertiary);">${fmtTime(sv.duration || 0)}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" class="btn btn-xs ${isPlaying ? 'btn-primary' : 'btn-ghost'}" data-smva="play" data-shared-id="${esc(sv.id)}" data-url="${esc(sv.audio_url)}" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 11.5px;">
+              ${isPlaying ? ico.pause : ico.play} <span>${isPlaying ? '일시정지' : '샘플 듣기'}</span>
+            </button>
+            <button type="button" class="btn btn-xs btn-primary" data-smva="select-import" data-shared-id="${esc(sv.id)}" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 11px; font-size: 11.5px; font-weight: 600;">
+              ${sv.imported ? ico.check : ico.importCloud}
+              <span>${sv.imported ? '선택하여 적용' : '가져와서 바로 사용'}</span>
+            </button>
+          </div>
+        </div>
+        ${sv.sample_text ? `
+          <div style="font-size: 12px; color: var(--text-secondary); background: var(--bg); padding: 6px 10px; border-radius: 6px;">
+            "${esc(sv.sample_text)}"
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+async function openSharedVoicesModal() {
+  const overlay = document.getElementById('sharedVoicesModalOverlay');
+  if (!overlay) return;
+  overlay.hidden = false;
+  renderSharedVoicesModalList();
+  await refreshSharedVoices(false);
+  renderSharedVoicesModalList();
+}
+
+function closeSharedVoicesModal() {
+  sharedPreviewPlayer.stop();
+  const overlay = document.getElementById('sharedVoicesModalOverlay');
+  if (overlay) overlay.hidden = true;
+}
+
 // ── Rename modal ──────────────────────────────────────────────────────────────
 function showRenameModal(voiceId, currentName, currentGender) {
   const voice = S.myVoices.find(v => String(v.id) === String(voiceId));
@@ -2744,10 +3294,11 @@ function toast(msg, type = '') {
 // ── Tab ───────────────────────────────────────────────────────────────────────
 function getVoiceHint(tab) {
   if (tab === 'my') return t('create.voiceHintMy');
+  if (tab === 'shared') return t('create.voiceHintShared');
   return t('create.voiceSelectHint');
 }
 
-document.getElementById('tabControl').addEventListener('click', e => {
+document.getElementById('tabControl').addEventListener('click', async e => {
   const btn = e.target.closest('.segment-btn');
   if (!btn || !btn.dataset.tab) return;
   document.querySelectorAll('#tabControl .segment-btn').forEach(b => b.classList.remove('active'));
@@ -2755,39 +3306,123 @@ document.getElementById('tabControl').addEventListener('click', e => {
   S.tab = btn.dataset.tab;
   document.getElementById('voiceSelectHint').textContent = getVoiceHint(S.tab);
   renderVoiceSelect();
+  if (S.tab === 'shared') {
+    await refreshSharedVoices(false);
+    renderVoiceSelect();
+  }
 });
 
-document.getElementById('voiceSelect').addEventListener('change', () => {
+document.getElementById('voiceSelect').addEventListener('change', async () => {
+  const selectedId = document.getElementById('voiceSelect').value;
+  if (!selectedId) return;
+
   if (S.tab === 'my') {
-    const selectedId = document.getElementById('voiceSelect').value;
     const voice = S.myVoices.find(v => String(v.id) === String(selectedId));
     if (voice) {
-      if (voice.style !== undefined) {
-        document.getElementById('styleInput').value = voice.style || '';
+      applyVoiceSettingsToCreateForm(voice);
+    }
+  } else if (S.tab === 'shared') {
+    try {
+      const imported = await importSharedVoiceById(selectedId);
+      if (imported) {
+        const sel = document.getElementById('voiceSelect');
+        if (sel) sel.value = selectedId;
+        applyVoiceSettingsToCreateForm(imported);
       }
-      if (voice.cfg_value !== undefined && voice.cfg_value !== null) {
-        const cfgVal = parseFloat(voice.cfg_value);
-        document.getElementById('cfgSlider').value = cfgVal;
-        document.getElementById('cfgVal').textContent = cfgVal.toFixed(1);
-      }
-      if (voice.steps !== undefined && voice.steps !== null) {
-        const stepsVal = parseInt(voice.steps);
-        document.getElementById('stepsSlider').value = stepsVal;
-        document.getElementById('stepsVal').textContent = stepsVal;
-      }
-      if (voice.target_db !== undefined && voice.target_db !== null) {
-        const dbVal = parseInt(voice.target_db);
-        document.getElementById('targetDbSlider').value = dbVal;
-        document.getElementById('targetDbVal').textContent = `${dbVal} dB`;
-      }
-      if (voice.speed !== undefined && voice.speed !== null) {
-        const speedVal = parseFloat(voice.speed);
-        document.getElementById('speedSlider').value = speedVal;
-        document.getElementById('speedVal').textContent = `${speedVal.toFixed(1)}x`;
-      }
+    } catch (err) {
+      toast('공유 음성 가져오기 실패: ' + err.message, 'error');
     }
   }
 });
+
+// ── 공유 저장소 모달 & 버튼 바인딩 ────────────────────────────────────────────
+const openSharedVoicesModalBtn = document.getElementById('openSharedVoicesModalBtn');
+if (openSharedVoicesModalBtn) {
+  openSharedVoicesModalBtn.addEventListener('click', () => {
+    openSharedVoicesModal();
+  });
+}
+
+const closeSharedModalBtn = document.getElementById('closeSharedModalBtn');
+if (closeSharedModalBtn) {
+  closeSharedModalBtn.addEventListener('click', closeSharedVoicesModal);
+}
+
+const sharedModalOverlay = document.getElementById('sharedVoicesModalOverlay');
+if (sharedModalOverlay) {
+  sharedModalOverlay.addEventListener('click', e => {
+    if (e.target === sharedModalOverlay) closeSharedVoicesModal();
+  });
+}
+
+const refreshSharedModalBtn = document.getElementById('refreshSharedModalBtn');
+if (refreshSharedModalBtn) {
+  refreshSharedModalBtn.addEventListener('click', async () => {
+    toast('깃허브 공유 저장소 목록을 새로고침합니다...', 'info');
+    await refreshSharedVoices(true);
+    renderSharedVoicesModalList();
+    renderVoiceSelect();
+    renderMyVoices();
+    toast('공유 저장소 목록이 업데이트되었습니다.', 'success');
+  });
+}
+
+const sharedModalGenderFilter = document.getElementById('sharedModalGenderFilter');
+if (sharedModalGenderFilter) {
+  sharedModalGenderFilter.addEventListener('click', e => {
+    const btn = e.target.closest('[data-gender-filter]');
+    if (!btn) return;
+    sharedModalGenderFilter.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    S.sharedModalGenderFilter = btn.dataset.genderFilter || 'all';
+    renderSharedVoicesModalList();
+  });
+}
+
+const sharedVoicesModalList = document.getElementById('sharedVoicesModalList');
+if (sharedVoicesModalList) {
+  sharedVoicesModalList.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-smva]');
+    if (!btn) return;
+    const { smva, sharedId, url } = btn.dataset;
+    if (smva === 'play') {
+      sharedPreviewPlayer.toggle(sharedId, url);
+    } else if (smva === 'select-import') {
+      try {
+        btn.disabled = true;
+        const imported = await importSharedVoiceById(sharedId);
+        if (imported) {
+          closeSharedVoicesModal();
+          document.querySelectorAll('#tabControl .segment-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.tab === 'shared');
+          });
+          S.tab = 'shared';
+          document.getElementById('voiceSelectHint').textContent = getVoiceHint('shared');
+          renderVoiceSelect();
+          const sel = document.getElementById('voiceSelect');
+          if (sel) sel.value = sharedId;
+          applyVoiceSettingsToCreateForm(imported);
+        }
+      } catch (err) {
+        toast('가져오기 실패: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  });
+}
+
+const openSharedRepoTabBtn = document.getElementById('openSharedRepoTabBtn');
+if (openSharedRepoTabBtn) {
+  openSharedRepoTabBtn.addEventListener('click', async () => {
+    document.querySelectorAll('#voiceTypeTabControl .segment-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.voiceTypeTab === 'shared_repo');
+    });
+    renderMyVoices();
+    await refreshSharedVoices(true);
+    renderMyVoices();
+  });
+}
 
 // ── Char count ────────────────────────────────────────────────────────────────
 document.getElementById('textInput').addEventListener('input', e => {
@@ -3177,17 +3812,52 @@ document.getElementById('sidebarToggle').addEventListener('click', () => {
   try { localStorage.setItem('vox_sidebar', collapsed ? '1' : '0'); } catch (_) {}
 });
 
-// ── 카카오뱅크 후원 QR 모달 ──────────────────────────────────────────────────
+// ── 개발자 후원 모달 (카카오뱅크 QR & PayPal) ────────────────────────────────
 const donateKakaoModal = document.getElementById('donateKakaoModal');
-document.getElementById('btnDonateKakao').addEventListener('click', () => {
-  donateKakaoModal.hidden = false;
-});
-document.getElementById('btnDonateKakaoClose').addEventListener('click', () => {
-  donateKakaoModal.hidden = true;
-});
-donateKakaoModal.addEventListener('click', (e) => {
-  if (e.target === donateKakaoModal) donateKakaoModal.hidden = true;
-});
+const btnDonateKakao = document.getElementById('btnDonateKakao');
+if (btnDonateKakao && donateKakaoModal) {
+  btnDonateKakao.addEventListener('click', () => {
+    donateKakaoModal.hidden = false;
+  });
+}
+const btnDonateKakaoClose = document.getElementById('btnDonateKakaoClose');
+if (btnDonateKakaoClose && donateKakaoModal) {
+  btnDonateKakaoClose.addEventListener('click', () => {
+    donateKakaoModal.hidden = true;
+  });
+}
+if (donateKakaoModal) {
+  donateKakaoModal.addEventListener('click', (e) => {
+    if (e.target === donateKakaoModal) donateKakaoModal.hidden = true;
+  });
+}
+const btnDonatePaypalLink = document.getElementById('btnDonatePaypalLink');
+if (btnDonatePaypalLink) {
+  btnDonatePaypalLink.addEventListener('click', () => {
+    const paypalUrl = 'https://www.paypal.com/paypalme/tech1010?locale.x=ko_KR&country.x=KR';
+    if (window.electronAPI && typeof window.electronAPI.openExternal === 'function') {
+      window.electronAPI.openExternal(paypalUrl);
+    } else {
+      window.open(paypalUrl, '_blank', 'noopener,noreferrer');
+    }
+  });
+}
+const donateDamiMascot = document.getElementById('donateDamiMascot');
+if (donateDamiMascot) {
+  let donateClickIdx = 0;
+  const donateQuotes = [
+    '소리담을 응원해주셔서 정말 고마워요!<br>따뜻한 커피 한 잔의 후원이 개발에 큰 힘이 됩니다!',
+    '보내주신 응원으로 더 똑똑하고 빠른 소리담을 만들어 갈게요!',
+    '100% 무료 오픈소스 소리담을 사랑해주셔서 진심으로 감사합니다!',
+  ];
+  donateDamiMascot.addEventListener('click', () => {
+    donateClickIdx = (donateClickIdx + 1) % donateQuotes.length;
+    donateDamiMascot.classList.add('dami-clicked');
+    setTimeout(() => donateDamiMascot.classList.remove('dami-clicked'), 500);
+    const speechEl = document.getElementById('donateDamiSpeech');
+    if (speechEl) speechEl.innerHTML = donateQuotes[donateClickIdx];
+  });
+}
 
 // ── History Selection Handlers ────────────────────────────────────────────────
 document.getElementById('outputsList').addEventListener('change', e => {
@@ -3249,7 +3919,7 @@ document.querySelectorAll('#voiceGenderTabControl .segment-btn').forEach(btn => 
 const voiceTypeTabs = document.querySelectorAll('#voiceTypeTabControl .segment-btn');
 if (voiceTypeTabs.length > 0) {
   voiceTypeTabs.forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       // 다른 탭 전환 시 인라인 재생 중인 오디오 정지 및 리셋
       if (myVoicePlayer) {
         if (myVoicePlayer.el && !myVoicePlayer.el.paused) {
@@ -3260,11 +3930,18 @@ if (voiceTypeTabs.length > 0) {
         }
         myVoicePlayer.activeId = null;
       }
+      if (sharedPreviewPlayer) {
+        sharedPreviewPlayer.stop();
+      }
 
       document.querySelectorAll('#voiceTypeTabControl .segment-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       
       renderMyVoices();
+      if (btn.dataset.voiceTypeTab === 'shared_repo') {
+        await refreshSharedVoices(false);
+        renderMyVoices();
+      }
     });
   });
 }
