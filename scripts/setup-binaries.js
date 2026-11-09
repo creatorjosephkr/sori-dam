@@ -164,6 +164,48 @@ function patchWindowsPython(winDir) {
     console.error('      ❌ [경고] CwdPatch.pth 생성 실패:', err.message);
   }
 
+  // ── Windows VC++ 런타임(msvcp140.dll, vcruntime140.dll 최신 버전 등) 내장 번들링 (PyTorch c10.dll WinError 1114 방지) ──
+  const msvcpMarker = path.join(winDir, 'msvcp140.dll');
+  if (!fs.existsSync(msvcpMarker)) {
+    console.log('   📦 Windows VC++ 런타임(msvc-runtime) 최신 DLL 내장 이식 중 (WinError 1114 원천 차단)...');
+    const hostPython = path.join(BIN_DIR, 'python-mac-arm64', 'bin', 'python3');
+    const pythonCmd = fs.existsSync(hostPython) ? hostPython : 'python3';
+    const tempMsvcDir = path.join(winDir, '_temp_msvc');
+    try {
+      fs.mkdirSync(tempMsvcDir, { recursive: true });
+      execSync(
+        `"${pythonCmd}" -m pip download --platform win_amd64 --python-version 310 --only-binary=:all: --no-deps msvc-runtime -d "${tempMsvcDir}"`,
+        { stdio: 'inherit' }
+      );
+      const whlFiles = fs.readdirSync(tempMsvcDir).filter(f => f.endsWith('.whl'));
+      if (whlFiles.length > 0) {
+        const whlPath = path.join(tempMsvcDir, whlFiles[0]);
+        const extractDir = path.join(tempMsvcDir, 'extracted');
+        fs.mkdirSync(extractDir, { recursive: true });
+        execSync(`unzip -q -o "${whlPath}" -d "${extractDir}"`);
+        // Scripts 폴더 안의 모든 최신 VC++ 런타임 DLL을 python.exe와 같은 폴더(winDir)로 복사
+        const findDlls = (dir) => {
+          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              findDlls(fullPath);
+            } else if (entry.name.toLowerCase().endsWith('.dll')) {
+              fs.copyFileSync(fullPath, path.join(winDir, entry.name));
+            }
+          }
+        };
+        findDlls(extractDir);
+        console.log('      [성공] Windows 최신 VC++ 런타임 DLL(msvcp140/vcruntime140/vcomp140 등) 내장 완료!');
+      }
+    } catch (e) {
+      console.warn('      ⚠️ Windows VC++ 런타임 사전 번들링 경고:', e.message);
+    } finally {
+      if (fs.existsSync(tempMsvcDir)) {
+        fs.rmSync(tempMsvcDir, { recursive: true, force: true });
+      }
+    }
+  }
+
   // ── Windows Embedded Python 용 필수 라이브러리(VoxCPM 및 FastAPI 등) 사전 번들링 ──
   const voxcpmMarker = path.join(sitePackagesDir, 'voxcpm');
   if (!fs.existsSync(voxcpmMarker)) {

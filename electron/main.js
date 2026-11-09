@@ -451,10 +451,19 @@ ipcMain.on('open-external', (_, url) => {
 
 ipcMain.on('set-height', (_, contentH) => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const workH = screen.getDisplayMatching(mainWindow.getBounds()).workArea.height;
+  if (mainWindow.isMaximized() || mainWindow.isFullScreen()) return;
+  const bounds = mainWindow.getBounds();
+  const workH = screen.getDisplayMatching(bounds).workArea.height;
   const newH = Math.max(480, Math.min(Math.ceil(contentH), Math.floor(workH * 0.92)));
-  const [w] = mainWindow.getContentSize();
-  mainWindow.setContentSize(w, newH);
+  const [, currentContentH] = mainWindow.getContentSize();
+  if (Math.abs(currentContentH - newH) <= 1) return;
+  const frameH = Math.max(0, bounds.height - currentContentH);
+  mainWindow.setBounds({
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: newH + frameH,
+  });
 });
 
 app.on('before-quit', () => {

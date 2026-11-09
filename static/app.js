@@ -3687,15 +3687,20 @@ document.getElementById('textInput').addEventListener('keydown', e => {
 
 // ── 음성 만들기 창 높이 동기화 ────────────────────────────────────────────────
 let _createRO = null;
+let _lastCreateHeight = 0;
 
 function startCreateSync() {
   if (!window.electronAPI) return;
   const inner = document.querySelector('.page-create-inner');
   if (!inner || _createRO) return;
+  _lastCreateHeight = 0;
   const sync = () => {
     const headerH = document.querySelector('.app-header')?.offsetHeight || 46;
     const footerH = document.querySelector('.app-footer')?.offsetHeight || 28;
-    window.electronAPI.setHeight(headerH + footerH + inner.offsetHeight);
+    const nextH = headerH + footerH + inner.offsetHeight;
+    if (Math.abs(nextH - _lastCreateHeight) <= 1) return;
+    _lastCreateHeight = nextH;
+    window.electronAPI.setHeight(nextH);
   };
   _createRO = new ResizeObserver(sync);
   _createRO.observe(inner);
@@ -3704,12 +3709,14 @@ function startCreateSync() {
 
 function stopCreateSync() {
   if (_createRO) { _createRO.disconnect(); _createRO = null; }
+  _lastCreateHeight = 0;
 }
 
 // ── 페이지 전환 ───────────────────────────────────────────────────────────────
 const VALID_PAGES = new Set(['home', 'create', 'history', 'register-voice', 'voices']);
 
 let registerPageObserver = null;
+let _lastRegisterVoiceHeight = 0;
 
 function adjustWindowHeightForRegisterVoice() {
   if (typeof window.electronAPI === 'undefined' || typeof window.electronAPI.setHeight !== 'function') return;
@@ -3723,6 +3730,8 @@ function adjustWindowHeightForRegisterVoice() {
   const footerH = footer ? footer.getBoundingClientRect().height : 36;
   const contentH = container.getBoundingClientRect().height || container.offsetHeight || 480;
   const totalHeight = Math.ceil(headerH + contentH + footerH) + 4; // 2px 상하 여유
+  if (Math.abs(totalHeight - _lastRegisterVoiceHeight) <= 1) return;
+  _lastRegisterVoiceHeight = totalHeight;
   window.electronAPI.setHeight(totalHeight);
 }
 

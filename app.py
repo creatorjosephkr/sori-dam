@@ -134,20 +134,100 @@ def get_working_pip_cmd():
 
     return ["-m", "pip"]
 
+_WIN_TORCH_VERSION = "2.5.1"
+_WIN_TORCHAUDIO_VERSION = "2.5.1"
+_WIN_MSVC_DLLS = (
+    "vcruntime140.dll",
+    "vcruntime140_1.dll",
+    "vcruntime140_threads.dll",
+    "msvcp140.dll",
+    "msvcp140_1.dll",
+    "msvcp140_2.dll",
+    "msvcp140_atomic_wait.dll",
+    "msvcp140_codecvt_ids.dll",
+    "vcomp140.dll",
+    "concrt140.dll",
+)
+
+def _preload_windows_msvc_dlls():
+    """Windows에서 구형 System32\\msvcp140.dll 충돌(WinError 1114: c10.dll 초기화 실패)을 방지하기 위해 최신 VC++ 런타임 DLL을 선제 로드합니다."""
+    if sys.platform != "win32":
+        return
+    import ctypes
+    candidate_dirs = [
+        Path(sys.executable).parent,
+        _WIN_RUNTIME_SITE / "Scripts",
+        _WIN_RUNTIME_SITE,
+        _WIN_RUNTIME_SITE / "torch" / "lib",
+    ]
+    existing_dirs = [d for d in candidate_dirs if d.is_dir()]
+    for d in existing_dirs:
+        try:
+            if hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(str(d))
+        except Exception:
+            pass
+    if existing_dirs:
+        os.environ["PATH"] = ";".join([str(d) for d in existing_dirs] + [os.environ.get("PATH", "")])
+
+    # torch/lib 폴더가 존재할 경우 최신 VC++ 런타임 DLL을 torch/lib에도 동기화하여 LoadLibraryExW가 최우선 참조하도록 보장
+    torch_lib_dir = _WIN_RUNTIME_SITE / "torch" / "lib"
+    for dll_name in _WIN_MSVC_DLLS:
+        for src_dir in existing_dirs:
+            dll_path = src_dir / dll_name
+            if dll_path.is_file():
+                if torch_lib_dir.is_dir() and src_dir != torch_lib_dir:
+                    target_dll = torch_lib_dir / dll_name
+                    try:
+                        if not target_dll.exists() or target_dll.stat().st_size != dll_path.stat().st_size:
+                            shutil.copy2(str(dll_path), str(target_dll))
+                    except Exception:
+                        pass
+                try:
+                    ctypes.CDLL(str(dll_path))
+                except Exception:
+                    pass
+                break
+
+def _ensure_windows_msvc_runtime(base_cmd):
+    """내장 파이썬 폴더나 런타임 사이트에 최신 msvcp140.dll이 없을 경우 msvc-runtime을 자동 설치합니다."""
+    if sys.platform != "win32":
+        return
+    py_dir = Path(sys.executable).parent
+    if not (py_dir / "msvcp140.dll").is_file() and not (_WIN_RUNTIME_SITE / "Scripts" / "msvcp140.dll").is_file():
+        print("[Sori-Dam] 🔧 Windows VC++ 런타임(msvc-runtime) 보완 설치 중...", flush=True)
+        try:
+            subprocess.check_call([
+                *base_cmd, "install",
+                "--target", str(_WIN_RUNTIME_SITE),
+                "--upgrade",
+                "--no-cache-dir",
+                "--no-deps",
+                "--no-warn-script-location",
+                "msvc-runtime"
+            ])
+        except Exception as e:
+            print(f"[Sori-Dam] msvc-runtime 설치 참고 메시지: {e}", flush=True)
+    _preload_windows_msvc_dlls()
+
 def install_missing_packages():
     pip_cmd_base = get_working_pip_cmd()
     base_cmd = [sys.executable, *pip_cmd_base] if len(pip_cmd_base) > 1 else [pip_cmd_base[0]]
     
-    # ── 1. Windows에서 PyTorch 및 TorchAudio 최우선 점검 및 설치 ──
+    # ── 1. Windows에서 VC++ 런타임 선제 로드 및 PyTorch/TorchAudio 최우선 점검·설치 ──
     # Program Files 설치 시에도 권한 오류가 절대 발생하지 않도록 _WIN_RUNTIME_SITE(--target)에 설치합니다.
     if sys.platform == 'win32':
+        _ensure_windows_msvc_runtime(base_cmd)
         need_torch = False
         try:
             import torch
             import torchaudio
-        except Exception:
+        except Exception as torch_import_err:
+            print(f"[Sori-Dam] ℹ️ PyTorch 초기 점검 안내 ({torch_import_err}). 호환 버전 설치/복구를 준비합니다...", flush=True)
             need_torch = True
-            # 손상되었거나 불완전한 기존 torch/torchaudio 폴더 정리
+            # 이미 로드 시도된 반쪽짜리 모듈 캐시 및 손상/불완전한 기존 torch/torchaudio 폴더 정리
+            for mod_key in [k for k in list(sys.modules.keys()) if k == "torch" or k.startswith("torch.") or k == "torchaudio" or k.startswith("torchaudio.")]:
+                sys.modules.pop(mod_key, None)
             for prefix in ("torch", "torchaudio"):
                 for item in _WIN_RUNTIME_SITE.glob(f"{prefix}*"):
                     try:
@@ -163,7 +243,7 @@ def install_missing_packages():
             installed_ok = False
 
             if use_cuda_wheel:
-                print("[Sori-Dam] ⚡ Windows CUDA 가속 PyTorch 및 TorchAudio(cu121) 고속 설치를 진행합니다...", flush=True)
+                print(f"[Sori-Dam] ⚡ Windows CUDA 가속 PyTorch({_WIN_TORCH_VERSION}+cu121) 고속 설치를 진행합니다...", flush=True)
                 torch_cuda_cmd = [
                     *base_cmd, "install",
                     "--target", str(_WIN_RUNTIME_SITE),
@@ -171,8 +251,8 @@ def install_missing_packages():
                     "--no-cache-dir",
                     "--no-deps",
                     "--no-warn-script-location",
-                    "torch",
-                    "torchaudio",
+                    f"torch=={_WIN_TORCH_VERSION}",
+                    f"torchaudio=={_WIN_TORCHAUDIO_VERSION}",
                     "--index-url", "https://download.pytorch.org/whl/cu121"
                 ]
                 try:
@@ -183,7 +263,7 @@ def install_missing_packages():
                     print(f"[Sori-Dam] ⚠️ CUDA 버전 PyTorch 설치 실패 ({cuda_err}). 호환 CPU 버전으로 자동 전환하여 설치합니다...", flush=True)
 
             if not installed_ok:
-                print("[Sori-Dam] ⚡ Windows 호환 PyTorch 및 TorchAudio(CPU 최적화 버전) 고속 설치를 진행합니다...", flush=True)
+                print(f"[Sori-Dam] ⚡ Windows 호환 PyTorch({_WIN_TORCH_VERSION} CPU 최적화 버전) 고속 설치를 진행합니다...", flush=True)
                 torch_cpu_cmd = [
                     *base_cmd, "install",
                     "--target", str(_WIN_RUNTIME_SITE),
@@ -191,8 +271,8 @@ def install_missing_packages():
                     "--no-cache-dir",
                     "--no-deps",
                     "--no-warn-script-location",
-                    "torch",
-                    "torchaudio"
+                    f"torch=={_WIN_TORCH_VERSION}",
+                    f"torchaudio=={_WIN_TORCHAUDIO_VERSION}"
                 ]
                 try:
                     subprocess.check_call(torch_cpu_cmd)
@@ -204,6 +284,7 @@ def install_missing_packages():
             importlib.invalidate_caches()
             if str(_WIN_RUNTIME_SITE) not in sys.path:
                 sys.path.append(str(_WIN_RUNTIME_SITE))
+            _preload_windows_msvc_dlls()
 
     # VoxCPM 호환성 패치 재확인
     ensure_voxcpm_patched()
@@ -215,7 +296,7 @@ def install_missing_packages():
             continue
         try:
             __import__(module_name)
-        except ImportError:
+        except (ImportError, OSError):
             missing.append(package_name)
             
     if missing:
@@ -231,6 +312,7 @@ def install_missing_packages():
                 if pkg == "voxcpm":
                     extra_args.append("--no-deps")
                 elif pkg in ("torch", "torchaudio"):
+                    install_pkg = f"torch=={_WIN_TORCH_VERSION}" if pkg == "torch" else f"torchaudio=={_WIN_TORCHAUDIO_VERSION}"
                     extra_args.append("--no-deps")
                     if has_capable_nvidia_gpu():
                         extra_args.extend(["--index-url", "https://download.pytorch.org/whl/cu121"])
@@ -254,6 +336,8 @@ def install_missing_packages():
                 sys.exit(1)
 
         ensure_voxcpm_patched()
+        if sys.platform == 'win32':
+            _preload_windows_msvc_dlls()
         print("[Sori-Dam] 모든 필수 패키지 설치 절차가 완료되었습니다!", flush=True)
 
     # ── 3. Windows 기존 설치 환경 점검: 고성능 NVIDIA GPU(VRAM 6GB+, CC 6.0+)가 있는데 CPU용 torch가 설치된 경우 자동 교체 ──
@@ -272,11 +356,12 @@ def install_missing_packages():
                     "--no-warn-script-location",
                     "--upgrade",
                     "--force-reinstall",
-                    "torch",
-                    "torchaudio",
+                    f"torch=={_WIN_TORCH_VERSION}",
+                    f"torchaudio=={_WIN_TORCHAUDIO_VERSION}",
                     "--index-url", "https://download.pytorch.org/whl/cu121"
                 ]
                 subprocess.check_call(cmd)
+                _preload_windows_msvc_dlls()
                 print("[Sori-Dam] ✅ CUDA 가속 PyTorch 교체 완료! 다음 기동 또는 생성부터 고속 GPU 추론이 활성화됩니다.", flush=True)
         except Exception as err:
             print(f"[Sori-Dam] ⚠️ Windows PyTorch 가속 버전 점검 중 경고: {err}", flush=True)
@@ -2066,7 +2151,7 @@ def _github_api_request(method: str, path: str, token: str = "", data: dict = No
     url = f"https://api.github.com/repos/{SHARED_VOICES_REPO}/{path.lstrip('/')}"
     headers = {
         "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "Sori-Dam-App/1.2.0",
+        "User-Agent": "Sori-Dam-App/1.2.1",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -2111,7 +2196,7 @@ def _fetch_shared_voices_index(force_refresh: bool = False) -> list[dict]:
     if remote_items is None:
         try:
             raw_url = f"https://raw.githubusercontent.com/{SHARED_VOICES_REPO}/{SHARED_VOICES_BRANCH}/shared_voices/index.json?t={int(now)}"
-            req = urllib.request.Request(raw_url, headers={"User-Agent": "Sori-Dam-App/1.2.0", "Cache-Control": "no-cache"})
+            req = urllib.request.Request(raw_url, headers={"User-Agent": "Sori-Dam-App/1.2.1", "Cache-Control": "no-cache"})
             with urllib.request.urlopen(req, timeout=8) as resp:
                 remote_items = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as he:
@@ -2178,7 +2263,7 @@ def _ensure_shared_audio_cached(shared_id: str, audio_file: str = None) -> Path:
     # GitHub Raw URL 또는 Contents API에서 다운로드
     raw_url = f"https://raw.githubusercontent.com/{SHARED_VOICES_REPO}/{SHARED_VOICES_BRANCH}/shared_voices/{safe_name}"
     try:
-        req = urllib.request.Request(raw_url, headers={"User-Agent": "Sori-Dam-App/1.2.0"})
+        req = urllib.request.Request(raw_url, headers={"User-Agent": "Sori-Dam-App/1.2.1"})
         with urllib.request.urlopen(req, timeout=20) as resp:
             data = resp.read()
             if len(data) > 100:
@@ -2237,7 +2322,7 @@ def save_shared_voices_token(
                 headers={
                     "Accept": "application/vnd.github.v3+json",
                     "Authorization": f"Bearer {tok}",
-                    "User-Agent": "Sori-Dam-App/1.2.0",
+                    "User-Agent": "Sori-Dam-App/1.2.1",
                 },
             )
             with urllib.request.urlopen(req, timeout=8) as resp:

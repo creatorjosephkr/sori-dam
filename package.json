@@ -1,6 +1,6 @@
 {
   "name": "sori-dam",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "로컬 인공지능 음성 생성기",
   "main": "electron/main.js",
   "scripts": {
