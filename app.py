@@ -118,6 +118,21 @@ def has_capable_nvidia_gpu() -> bool:
         pass
     return False
 
+def windows_torch_profile():
+    """Keep the legacy build for older cards; use Blackwell wheels for RTX 50+."""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=compute_cap,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, timeout=5
+        )
+        capability, memory = result.stdout.strip().splitlines()[0].split(",")
+        if result.returncode == 0 and float(capability) >= 10 and float(memory) >= 5500:
+            return "2.7.1", "cu128"
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+        pass
+    return "2.5.1", "cu121"
+
+
 def get_working_pip_cmd():
     """실제로 사용 가능한 pip 모듈을 확인하여 리턴합니다."""
     try:
@@ -134,8 +149,9 @@ def get_working_pip_cmd():
 
     return ["-m", "pip"]
 
-_WIN_TORCH_VERSION = "2.5.1"
-_WIN_TORCHAUDIO_VERSION = "2.5.1"
+_WIN_TORCH_VERSION, _WIN_CUDA_CHANNEL = windows_torch_profile() if sys.platform == "win32" else ("2.5.1", "cu121")
+_WIN_TORCHAUDIO_VERSION = _WIN_TORCH_VERSION
+_WIN_CUDA_INDEX = f"https://download.pytorch.org/whl/{_WIN_CUDA_CHANNEL}"
 _WIN_MSVC_DLLS = (
     "vcruntime140.dll",
     "vcruntime140_1.dll",
@@ -217,6 +233,26 @@ def install_missing_packages():
     # ── 1. Windows에서 VC++ 런타임 선제 로드 및 PyTorch/TorchAudio 최우선 점검·설치 ──
     # Program Files 설치 시에도 권한 오류가 절대 발생하지 않도록 _WIN_RUNTIME_SITE(--target)에 설치합니다.
     if sys.platform == 'win32':
+        # Inspect metadata before importing DLLs: loaded torch DLLs cannot be replaced safely.
+        from importlib.metadata import distributions
+        installed = {dist.metadata["Name"].lower(): dist.version
+                     for dist in distributions(path=[str(_WIN_RUNTIME_SITE)])
+                     if dist.metadata.get("Name")}
+        expected = f"{_WIN_TORCH_VERSION}+{_WIN_CUDA_CHANNEL}"
+        if has_capable_nvidia_gpu() and any(
+            installed.get(name) != expected for name in ("torch", "torchaudio")
+        ):
+            print(f"[Sori-Dam] GPU 호환 패키지 설치: PyTorch {expected}", flush=True)
+            try:
+                subprocess.check_call([
+                    *base_cmd, "install", "--target", str(_WIN_RUNTIME_SITE),
+                    "--upgrade", "--no-cache-dir", "--no-deps", "--no-warn-script-location",
+                    f"torch=={expected}", f"torchaudio=={expected}",
+                    "--index-url", _WIN_CUDA_INDEX
+                ])
+                importlib.invalidate_caches()
+            except subprocess.CalledProcessError as err:
+                print(f"[Sori-Dam] CUDA 패키지 설치 실패: {err}. 기존 패키지 또는 CPU 설치로 계속합니다.", flush=True)
         _ensure_windows_msvc_runtime(base_cmd)
         need_torch = False
         try:
@@ -243,7 +279,7 @@ def install_missing_packages():
             installed_ok = False
 
             if use_cuda_wheel:
-                print(f"[Sori-Dam] ⚡ Windows CUDA 가속 PyTorch({_WIN_TORCH_VERSION}+cu121) 고속 설치를 진행합니다...", flush=True)
+                print(f"[Sori-Dam] ⚡ Windows CUDA 가속 PyTorch({_WIN_TORCH_VERSION}+{_WIN_CUDA_CHANNEL}) 고속 설치를 진행합니다...", flush=True)
                 torch_cuda_cmd = [
                     *base_cmd, "install",
                     "--target", str(_WIN_RUNTIME_SITE),
@@ -253,7 +289,7 @@ def install_missing_packages():
                     "--no-warn-script-location",
                     f"torch=={_WIN_TORCH_VERSION}",
                     f"torchaudio=={_WIN_TORCHAUDIO_VERSION}",
-                    "--index-url", "https://download.pytorch.org/whl/cu121"
+                    "--index-url", _WIN_CUDA_INDEX
                 ]
                 try:
                     subprocess.check_call(torch_cuda_cmd)
@@ -272,7 +308,8 @@ def install_missing_packages():
                     "--no-deps",
                     "--no-warn-script-location",
                     f"torch=={_WIN_TORCH_VERSION}",
-                    f"torchaudio=={_WIN_TORCHAUDIO_VERSION}"
+                    f"torchaudio=={_WIN_TORCHAUDIO_VERSION}",
+                    "--index-url", "https://download.pytorch.org/whl/cpu"
                 ]
                 try:
                     subprocess.check_call(torch_cpu_cmd)
@@ -315,7 +352,7 @@ def install_missing_packages():
                     install_pkg = f"torch=={_WIN_TORCH_VERSION}" if pkg == "torch" else f"torchaudio=={_WIN_TORCHAUDIO_VERSION}"
                     extra_args.append("--no-deps")
                     if has_capable_nvidia_gpu():
-                        extra_args.extend(["--index-url", "https://download.pytorch.org/whl/cu121"])
+                        extra_args.extend(["--index-url", _WIN_CUDA_INDEX])
             
             print(f"[Sori-Dam] 패키지 설치 진행 중: {install_pkg} (추가옵션: {extra_args})...", flush=True)
             try:
@@ -340,31 +377,6 @@ def install_missing_packages():
             _preload_windows_msvc_dlls()
         print("[Sori-Dam] 모든 필수 패키지 설치 절차가 완료되었습니다!", flush=True)
 
-    # ── 3. Windows 기존 설치 환경 점검: 고성능 NVIDIA GPU(VRAM 6GB+, CC 6.0+)가 있는데 CPU용 torch가 설치된 경우 자동 교체 ──
-    if sys.platform == 'win32':
-        try:
-            import torch
-            if not torch.cuda.is_available() and has_capable_nvidia_gpu():
-                print("[Sori-Dam] 💡 고성능 NVIDIA 그래픽카드가 감지되었으나 현재 PyTorch는 CPU 전용 버전입니다.", flush=True)
-                print("[Sori-Dam] ⚡ 빠른 음성 생성을 위해 CUDA 가속 PyTorch(cu121)로 자동 교체 설치를 진행합니다...", flush=True)
-                base_cmd = [sys.executable, *pip_cmd_base] if len(pip_cmd_base) > 1 else [pip_cmd_base[0]]
-                cmd = [
-                    *base_cmd, "install",
-                    "--target", str(_WIN_RUNTIME_SITE),
-                    "--no-cache-dir",
-                    "--no-deps",
-                    "--no-warn-script-location",
-                    "--upgrade",
-                    "--force-reinstall",
-                    f"torch=={_WIN_TORCH_VERSION}",
-                    f"torchaudio=={_WIN_TORCHAUDIO_VERSION}",
-                    "--index-url", "https://download.pytorch.org/whl/cu121"
-                ]
-                subprocess.check_call(cmd)
-                _preload_windows_msvc_dlls()
-                print("[Sori-Dam] ✅ CUDA 가속 PyTorch 교체 완료! 다음 기동 또는 생성부터 고속 GPU 추론이 활성화됩니다.", flush=True)
-        except Exception as err:
-            print(f"[Sori-Dam] ⚠️ Windows PyTorch 가속 버전 점검 중 경고: {err}", flush=True)
 
 install_missing_packages()
 
@@ -387,18 +399,32 @@ import numpy as np
 import torch
 
 # ── 하드웨어 가속 및 스레드 최적화 ─────────────────────────────────────────────
+_cuda_probe_result = None
+
+
 def can_use_cuda_for_voxcpm() -> bool:
-    """VoxCPM2(4.6GB) 모델이 GPU 메모리 부족이나 구형 아키텍처 커널 오류 없이 구동 가능한지 점검"""
+    """Test real CUDA kernels once, including the model's low precision math."""
+    global _cuda_probe_result
+    if _cuda_probe_result is not None:
+        return _cuda_probe_result
+    _cuda_probe_result = False
     if not torch.cuda.is_available():
         return False
     try:
         props = torch.cuda.get_device_properties(0)
-        vram_mb = props.total_memory / (1024 * 1024)
-        if props.major < 6 or vram_mb < 5500:
+        if props.major < 6 or props.total_memory / (1024 * 1024) < 5500:
             return False
-        return True
-    except Exception:
-        return False
+        dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        with torch.inference_mode():
+            probe = torch.ones((32, 32), device="cuda:0", dtype=dtype)
+            result = probe @ probe
+            torch.cuda.synchronize(0)
+            if result[0, 0].item() != 32:
+                raise RuntimeError("CUDA 연산 검증 실패")
+        _cuda_probe_result = True
+    except Exception as err:
+        print(f"[Sori-Dam] CUDA 연산 점검 실패: {err}. CPU 모드를 사용합니다. NVIDIA 드라이버도 확인해 주세요.", flush=True)
+    return _cuda_probe_result
 
 if can_use_cuda_for_voxcpm():
     print(f"[Sori-Dam] 🚀 CUDA GPU 가속 활성화됨: {torch.cuda.get_device_name(0)}", flush=True)
@@ -408,7 +434,7 @@ else:
     cpu_threads = max(1, (os.cpu_count() or 4) - 1)
     torch.set_num_threads(cpu_threads)
     if torch.cuda.is_available():
-        print(f"[Sori-Dam] ℹ️ 감지된 GPU({torch.cuda.get_device_name(0)})는 4.6GB 모델 가속 최소 사양(VRAM 6GB+, CC 6.0+) 미만으로, 안정적인 CPU 멀티스레드 모드({cpu_threads} 스레드)로 구동됩니다.", flush=True)
+        print(f"[Sori-Dam] ℹ️ 감지된 GPU({torch.cuda.get_device_name(0)})는 GPU 사양 또는 CUDA 연산 호환성 점검을 통과하지 못해, CPU 멀티스레드 모드({cpu_threads} 스레드)로 구동됩니다.", flush=True)
     else:
         print(f"[Sori-Dam] ℹ️ CPU 모드로 구동됩니다. 멀티스레드 최적화 적용: {cpu_threads} 스레드", flush=True)
 
@@ -742,6 +768,7 @@ migrate_db()
 
 # ── VoxCPM Model (lazy) ──────────────────────────────────────────────────────
 _model = None
+_model_device = None
 
 def _patch_voxcpm_audio_loader():
     """macOS dyld scipy.signal 충돌 방지를 위한 안전한 오디오 로더 몽키패치"""
@@ -984,7 +1011,7 @@ def _patch_safetensors_loader():
         print(f"[Sori-Dam] safetensors 후킹 경고: {e}", flush=True)
 
 def get_model(progress_cb=None):
-    global _model, _current_load_progress_cb
+    global _model, _model_device, _current_load_progress_cb
     if _model is not None:
         return _model
     with _model_load_lock:
@@ -1047,6 +1074,7 @@ def get_model(progress_cb=None):
                 except Exception:
                     pass
                 try:
+                    target_device = "cpu"
                     _model = VoxCPM.from_pretrained(
                         "openbmb/VoxCPM2",
                         load_denoiser=False,
@@ -1062,6 +1090,7 @@ def get_model(progress_cb=None):
                 traceback.print_exc()
                 raise RuntimeError(f"VoxCPM2 모델 가중치 로드 중 오류가 발생했습니다: {e}")
 
+        _model_device = target_device
         if progress_cb:
             progress_cb(
                 loaded_mb=4580,
@@ -1070,7 +1099,7 @@ def get_model(progress_cb=None):
                 stage="done",
                 msg="AI 모델 준비 완료! 음성 합성을 시작합니다."
             )
-        print("[Sori-Dam] VoxCPM2 모델 로드 완료!", flush=True)
+        print(f"[Sori-Dam] VoxCPM2 모델 로드 완료! (실행 장치: {_model_device})", flush=True)
         _current_load_progress_cb = None
     return _model
 
@@ -1096,12 +1125,12 @@ def get_hardware_info():
         cpu_brand = platform.processor() or "CPU"
 
     # 가속 엔진 및 디스플레이 이름 결정
-    if can_use_cuda_for_voxcpm():
+    if _model_device == "cuda" or (_model_device is None and can_use_cuda_for_voxcpm()):
         gpu_name = torch.cuda.get_device_name(0)
         device_type = "cuda"
         device_label = f"NVIDIA CUDA ({gpu_name})"
         tag_label = f"CUDA: {gpu_name.replace('NVIDIA GeForce ', '')}"
-    elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+    elif _model_device == "mps" or (_model_device is None and getattr(torch.backends, "mps", None) and torch.backends.mps.is_available()):
         device_type = "mps"
         device_label = f"{cpu_brand} (Metal/MPS 가속)"
         tag_label = f"{cpu_brand} MPS"
@@ -2151,7 +2180,7 @@ def _github_api_request(method: str, path: str, token: str = "", data: dict = No
     url = f"https://api.github.com/repos/{SHARED_VOICES_REPO}/{path.lstrip('/')}"
     headers = {
         "Accept": "application/vnd.github.v3+json",
-        "User-Agent": "Sori-Dam-App/1.2.1",
+        "User-Agent": "Sori-Dam-App/1.2.2",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -2196,7 +2225,7 @@ def _fetch_shared_voices_index(force_refresh: bool = False) -> list[dict]:
     if remote_items is None:
         try:
             raw_url = f"https://raw.githubusercontent.com/{SHARED_VOICES_REPO}/{SHARED_VOICES_BRANCH}/shared_voices/index.json?t={int(now)}"
-            req = urllib.request.Request(raw_url, headers={"User-Agent": "Sori-Dam-App/1.2.1", "Cache-Control": "no-cache"})
+            req = urllib.request.Request(raw_url, headers={"User-Agent": "Sori-Dam-App/1.2.2", "Cache-Control": "no-cache"})
             with urllib.request.urlopen(req, timeout=8) as resp:
                 remote_items = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as he:
@@ -2263,7 +2292,7 @@ def _ensure_shared_audio_cached(shared_id: str, audio_file: str = None) -> Path:
     # GitHub Raw URL 또는 Contents API에서 다운로드
     raw_url = f"https://raw.githubusercontent.com/{SHARED_VOICES_REPO}/{SHARED_VOICES_BRANCH}/shared_voices/{safe_name}"
     try:
-        req = urllib.request.Request(raw_url, headers={"User-Agent": "Sori-Dam-App/1.2.1"})
+        req = urllib.request.Request(raw_url, headers={"User-Agent": "Sori-Dam-App/1.2.2"})
         with urllib.request.urlopen(req, timeout=20) as resp:
             data = resp.read()
             if len(data) > 100:
@@ -2322,7 +2351,7 @@ def save_shared_voices_token(
                 headers={
                     "Accept": "application/vnd.github.v3+json",
                     "Authorization": f"Bearer {tok}",
-                    "User-Agent": "Sori-Dam-App/1.2.1",
+                    "User-Agent": "Sori-Dam-App/1.2.2",
                 },
             )
             with urllib.request.urlopen(req, timeout=8) as resp:

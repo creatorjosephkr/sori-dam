@@ -86,6 +86,8 @@
 | **저장공간** | 3GB 이상 여유 공간 | 3GB 이상 여유 공간 |
 | **인터넷** | 최초 모델 다운로드 시 필요 | 최초 모델 다운로드 시 필요 |
 
+**Windows GPU 가속**: NVIDIA GPU는 VRAM 8GB 이상을 권장합니다. v1.2.2부터 RTX 5050 및 RTX 50 시리즈에는 CUDA 12.8용 PyTorch를 자동 설치하며, GPU에 맞는 NVIDIA 드라이버가 필요합니다. 실제 CUDA 연산 점검 또는 모델 로딩이 실패하면 CPU로 전환합니다. AMD/Intel GPU는 현재 CPU 모드로 실행됩니다. RTX 5050 실기기 성능 검증은 아직 수행하지 않았습니다.
+
 > ⚠️ **macOS는 Apple Silicon (M 시리즈) 칩에서 잘 작동합니다.** Intel Mac은 지원하지 않습니다.
 
 ---
