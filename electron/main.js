@@ -12,6 +12,121 @@ let pythonProcess = null;
 let mainWindow = null;
 let loadingWindow = null;
 
+// ── Windows 11 스마트 앱 컨트롤(Smart App Control) 감지 및 안내 ─────────────────
+// 스마트 앱 컨트롤이 켜져 있으면 서명되지 않은 .dll/.pyd(PyTorch 등) 로드가 차단되어
+// "[WinError 4551] 애플리케이션 제어 정책에서 이 파일을 차단했습니다" 오류가 발생합니다.
+let sacBlockGuideShown = false;
+
+function getSacPrefPath() {
+  return path.join(app.getPath('userData'), 'sac-guide.json');
+}
+
+function isSacStartupGuideDismissed() {
+  try {
+    const fs = require('fs');
+    return JSON.parse(fs.readFileSync(getSacPrefPath(), 'utf8')).dismissed === true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function setSacStartupGuideDismissed() {
+  try {
+    const fs = require('fs');
+    fs.writeFileSync(getSacPrefPath(), JSON.stringify({ dismissed: true }), 'utf8');
+  } catch (_) {}
+}
+
+/**
+ * 스마트 앱 컨트롤 상태 반환: 'on' | 'eval' | 'off' | 'unsupported' | 'unknown'
+ * HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy\VerifiedAndReputablePolicyState
+ *   0 = 끔, 1 = 켬(차단 적용), 2 = 평가 모드(차단하지 않음)
+ */
+function getSmartAppControlState() {
+  if (process.platform !== 'win32') return 'unsupported';
+  try {
+    const os = require('os');
+    const build = parseInt(String(os.release()).split('.')[2] || '0', 10);
+    if (build < 22000) return 'unsupported'; // Windows 10 이하
+    const { execSync } = require('child_process');
+    const out = execSync(
+      'reg query "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CI\\Policy" /v VerifiedAndReputablePolicyState',
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true, timeout: 5000 }
+    );
+    const m = out.match(/VerifiedAndReputablePolicyState\s+REG_DWORD\s+0x([0-9a-f]+)/i);
+    if (!m) return 'unknown';
+    const v = parseInt(m[1], 16);
+    if (v === 1) return 'on';
+    if (v === 2) return 'eval';
+    if (v === 0) return 'off';
+    return 'unknown';
+  } catch (_) {
+    return 'unknown';
+  }
+}
+
+function openSmartAppControlSettings() {
+  // Windows 보안 → 앱 및 브라우저 컨트롤 화면
+  shell.openExternal('windowsdefender://appbrowser/').catch(() => {
+    shell.openExternal('ms-settings:windowsdefender').catch(() => {});
+  });
+}
+
+/**
+ * 스마트 앱 컨트롤 안내창 표시
+ * @param {'startup'|'blocked'} reason
+ * @returns {Promise<'continue'|'quit'>}
+ */
+async function showSmartAppControlGuide(reason) {
+  const parent = [mainWindow, loadingWindow].find(w => w && !w.isDestroyed()) || undefined;
+  const isBlocked = reason === 'blocked';
+  const opts = {
+    type: 'warning',
+    title: '스마트 앱 컨트롤 안내',
+    message: isBlocked
+      ? 'Windows 스마트 앱 컨트롤이 소리담의 AI 구성 요소를 차단했습니다.'
+      : 'Windows 스마트 앱 컨트롤이 켜져 있습니다.',
+    detail:
+      (isBlocked
+        ? '"[WinError 4551] 애플리케이션 제어 정책에서 이 파일을 차단했습니다" 오류는 ' +
+          '스마트 앱 컨트롤이 AI 엔진(PyTorch 등) 파일 실행을 막아서 발생합니다.\n\n'
+        : '스마트 앱 컨트롤이 켜져 있으면 AI 엔진(PyTorch 등) 파일이 차단되어 ' +
+          '음성 생성 중 "[WinError 4551]" 오류가 발생할 수 있습니다.\n\n') +
+      '해결 방법:\n' +
+      '  1. 아래 [설정 열기]를 누릅니다.\n' +
+      '  2. [스마트 앱 컨트롤 설정]에서 [끄기]를 선택합니다.\n' +
+      '  3. 소리담을 다시 실행합니다.\n\n' +
+      '⚠ 스마트 앱 컨트롤은 Windows 보안 기능입니다. Windows 버전에 따라 한 번 끄면 ' +
+      'Windows를 재설치하기 전까지 다시 켤 수 없을 수 있으니, 신중히 결정해 주세요.',
+    buttons: ['설정 열기', isBlocked ? '닫기' : '그대로 계속', '앱 종료'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true,
+  };
+  if (!isBlocked) opts.checkboxLabel = '다시 표시하지 않기';
+
+  const { response, checkboxChecked } = parent
+    ? await dialog.showMessageBox(parent, opts)
+    : await dialog.showMessageBox(opts);
+
+  if (!isBlocked && checkboxChecked) setSacStartupGuideDismissed();
+  if (response === 0) {
+    openSmartAppControlSettings();
+    return 'continue';
+  }
+  if (response === 2) return 'quit';
+  return 'continue';
+}
+
+/** 파이썬 로그에서 WinError 4551 차단을 감지하면 1회 안내 */
+function checkSacBlockInLog(logStr) {
+  if (sacBlockGuideShown || process.platform !== 'win32') return;
+  if (/WinError 4551|애플리케이션 제어 정책|Application Control policy has blocked/i.test(logStr)) {
+    sacBlockGuideShown = true;
+    showSmartAppControlGuide('blocked').then(r => { if (r === 'quit') app.quit(); });
+  }
+}
+
 // ── Paths ─────────────────────────────────────────────────────────────────────
 function getAppDir() {
   return app.isPackaged
@@ -188,6 +303,7 @@ function spawnPython(appDir, dataDir) {
     proc.stdout.on('data', d => {
       const logStr = d.toString();
       process.stdout.write('[server] ' + logStr);
+      checkSacBlockInLog(logStr);
       if (loadingWindow && !loadingWindow.isDestroyed()) {
         loadingWindow.webContents.send('server-log', logStr);
       }
@@ -195,6 +311,7 @@ function spawnPython(appDir, dataDir) {
     proc.stderr.on('data', d => {
       const logStr = d.toString();
       process.stderr.write('[server] ' + logStr);
+      checkSacBlockInLog(logStr);
       if (loadingWindow && !loadingWindow.isDestroyed()) {
         loadingWindow.webContents.send('server-log', logStr);
       }
@@ -409,6 +526,15 @@ function checkForUpdates(win) {
 // ── 앱 생명주기 ───────────────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   createLoadingWindow();
+
+  // Windows 11 스마트 앱 컨트롤이 켜져 있으면 기동 전에 안내
+  if (getSmartAppControlState() === 'on' && !isSacStartupGuideDismissed()) {
+    const choice = await showSmartAppControlGuide('startup');
+    if (choice === 'quit') {
+      app.quit();
+      return;
+    }
+  }
 
   try {
     const appDir = getAppDir();
