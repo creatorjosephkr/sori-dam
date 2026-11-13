@@ -1,5 +1,21 @@
 [
   {
+    "id": "shared_1794535419_70118b",
+    "name": "조금 딱딱한 여성",
+    "gender": "여성",
+    "voice_type": "female_actor",
+    "style": "",
+    "sample_text": "",
+    "duration": 4.96,
+    "cfg_value": 2.0,
+    "steps": 10,
+    "target_db": -6.0,
+    "speed": 1.0,
+    "audio_file": "shared_1794535419_70118b.wav",
+    "author": "creatorjosephkr",
+    "created_at": 1794535419.14
+  },
+  {
     "id": "shared_1794534878_19b033",
     "name": "젋고 당찬 여성",
     "gender": "여성",
