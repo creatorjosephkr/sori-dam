@@ -1,5 +1,21 @@
 [
   {
+    "id": "shared_1794531386_2b625d",
+    "name": "미~ 음의 밝은 여성",
+    "gender": "여성",
+    "voice_type": "female_actor",
+    "style": "도레미~ 음의 밝은 여성 스타일",
+    "sample_text": "",
+    "duration": 5.92,
+    "cfg_value": 2.0,
+    "steps": 10,
+    "target_db": -6.0,
+    "speed": 1.0,
+    "audio_file": "shared_1794531386_2b625d.wav",
+    "author": "creatorjosephkr",
+    "created_at": 1794531386.99
+  },
+  {
     "id": "shared_1793922731_20a5ca",
     "name": "다큐 나레이터",
     "gender": "남성",
