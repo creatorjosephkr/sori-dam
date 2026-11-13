@@ -1,5 +1,21 @@
 [
   {
+    "id": "shared_1794533735_e5afa5",
+    "name": "젋고 귀여운 여성스타일1",
+    "gender": "여성",
+    "voice_type": "female_actor",
+    "style": "젊고 귀여운 여성 스타일",
+    "sample_text": "인공지능으로 음성 만들면 뭔가 좀 어색하죠? 아무래도 사람이 아니라서 억양도 그렇고 상황에 맞는 감정 표현도 서툴잖아요. 그래도 잘 활용하면 참 멋진 도구이지 않을까요?",
+    "duration": 13.76,
+    "cfg_value": 2.0,
+    "steps": 10,
+    "target_db": -6.0,
+    "speed": 1.0,
+    "audio_file": "shared_1794533735_e5afa5.wav",
+    "author": "creatorjosephkr",
+    "created_at": 1794533735.92
+  },
+  {
     "id": "shared_1794531386_2b625d",
     "name": "미~ 음의 밝은 여성",
     "gender": "여성",
