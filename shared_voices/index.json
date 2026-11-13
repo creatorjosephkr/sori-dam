@@ -1,5 +1,21 @@
 [
   {
+    "id": "shared_1794534134_585c04",
+    "name": "자연스러운 토론 느낌",
+    "gender": "남성",
+    "voice_type": "male_actor",
+    "style": "자연스러운 토론 느낌",
+    "sample_text": "",
+    "duration": 9.92,
+    "cfg_value": 2.0,
+    "steps": 10,
+    "target_db": -6.0,
+    "speed": 1.0,
+    "audio_file": "shared_1794534134_585c04.wav",
+    "author": "creatorjosephkr",
+    "created_at": 1794534134.67
+  },
+  {
     "id": "shared_1794533735_e5afa5",
     "name": "젋고 귀여운 여성스타일1",
     "gender": "여성",
