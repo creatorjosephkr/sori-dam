@@ -1,5 +1,21 @@
 [
   {
+    "id": "shared_1794534878_19b033",
+    "name": "젋고 당찬 여성",
+    "gender": "여성",
+    "voice_type": "female_actor",
+    "style": "기분 좋은 느낌의 활기찬 젊은 여성",
+    "sample_text": "",
+    "duration": 11.36,
+    "cfg_value": 2.0,
+    "steps": 10,
+    "target_db": -6.0,
+    "speed": 1.0,
+    "audio_file": "shared_1794534878_19b033.wav",
+    "author": "creatorjosephkr",
+    "created_at": 1794534878.66
+  },
+  {
     "id": "shared_1794534134_585c04",
     "name": "자연스러운 토론 느낌",
     "gender": "남성",
